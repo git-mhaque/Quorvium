@@ -25,4 +25,5 @@
 ## Collaboration Workflow
 - Follow Conventional Commits (e.g., `feat:`, `fix:`). Keep pull requests scoped (<400 LOC) with summary, testing evidence, and linked issues.
 - Include screenshots or Loom/GIF demos for UI changes, especially auth and board interactions.
+- When a feature or fix shifts product expectations, update `spec.md` (and other relevant docs) in the same change before opening a PR.
 - Run the full test suite before requesting merge. For socket-layer changes, pair with at least one reviewer familiar with real-time flows.
