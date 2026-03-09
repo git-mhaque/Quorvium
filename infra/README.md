@@ -34,6 +34,11 @@ This directory contains Terraform configuration that provisions the minimal prod
      serviceAccount:YOUR_DEPLOYER_SA@quorvium.iam.gserviceaccount.com:objectAdmin \
      gs://staging-quorvium-client
    ```
+   Make the bucket’s objects publicly readable for staging testing:
+   ```sh
+   gsutil uniformbucketlevelaccess set on gs://staging-quorvium-client
+   gsutil iam ch allUsers:objectViewer gs://staging-quorvium-client
+   ```
    Upload the `client/dist` build with `gsutil -m rsync -r client/dist gs://staging-quorvium-client`. The CI workflow expects a GitHub environment secret named `STAGING_BUCKET` containing this bucket URI (`gs://staging-quorvium-client`).
 6. Initialize the workspace:
    ```sh
