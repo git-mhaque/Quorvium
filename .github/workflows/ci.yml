@@ -137,4 +137,10 @@ jobs:
             echo "STAGING_BUCKET secret is not set" >&2
             exit 1
           fi
-          gsutil -m rsync -d -r client/dist "${STAGING_BUCKET}"
+          if ! printf '%s' "${STAGING_BUCKET}" | grep -q '^gs://'; then
+            echo "STAGING_BUCKET must start with gs:// (received: ${STAGING_BUCKET})" >&2
+            exit 1
+          fi
+          TARGET="${STAGING_BUCKET%/}"
+          echo "Syncing client/dist -> ${TARGET}"
+          gsutil -m rsync -d -r client/dist "${TARGET}"
