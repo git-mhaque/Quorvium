@@ -1,9 +1,9 @@
 # Productionization Plan
 
 ## Stabilise the Codebase
-- [ ] Configure CI to run `npm test --cache=/tmp/npm-cache`, `npm run lint`, and `npm run build` on every push and pull request.
-- [ ] Add end-to-end/UI regression tests (e.g., Cypress or Playwright) covering board creation/deletion modals and the My Boards table.
-- [ ] Enable TypeScript `tsc --noEmit` and additional static analysis in CI (e.g., Sonar, ESLint with stricter rules).
+- [x] Configure CI to run automated lint, test, build, and type-check pipelines on every push and pull request.
+- [x] Add UI regression tests covering board creation/deletion modals and the My Boards table interactions.
+- [x] Enable TypeScript `tsc --noEmit` in the shared CI pipeline alongside existing static analysis.
 
 ## Production Configuration & Hardening
 - [ ] Move environment variables to a managed secrets provider (GitHub/GitLab secrets, AWS Parameter Store, etc.) and remove reliance on local `.env` files.

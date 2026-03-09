@@ -738,7 +738,11 @@ function GoogleSignInButton({ onCode, onError }: GoogleSignInButtonProps) {
     redirect_uri: env.googleRedirectUri,
     onSuccess: async (response) => {
       if (response.code) {
-        await onCode(response.code).catch(() => undefined);
+        try {
+          await onCode(response.code);
+        } catch {
+          onError();
+        }
       } else {
         onError();
       }

@@ -297,7 +297,7 @@ export function BoardPage() {
         }}
       >
         <div className="card">
-          <p style={{ marginBottom: '1.5rem' }}>{error}</p>
+          <p style={{ marginBottom: '1.5rem' }}>{fatalError}</p>
           <button className="btn btn-primary" onClick={() => navigate('/')}>
             Go back home
           </button>
