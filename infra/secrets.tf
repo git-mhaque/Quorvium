@@ -2,7 +2,7 @@ resource "google_secret_manager_secret" "oauth_client_secret" {
   secret_id = var.oauth_client_secret_secret_id
 
   replication {
-    automatic = true
+    auto {}
   }
 }
 

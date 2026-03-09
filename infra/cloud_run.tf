@@ -37,11 +37,6 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
-        name  = "PORT"
-        value = "4000"
-      }
-
-      env {
         name  = "CLIENT_ORIGIN"
         value = var.client_origin
       }
