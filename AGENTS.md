@@ -27,3 +27,4 @@
 - Include screenshots or Loom/GIF demos for UI changes, especially auth and board interactions.
 - When a feature or fix shifts product expectations, update `spec.md` (and other relevant docs) in the same change before opening a PR.
 - Run the full test suite before requesting merge. For socket-layer changes, pair with at least one reviewer familiar with real-time flows.
+- Before pushing or opening a PR, run `npm run lint && npm run typecheck && npm run test --cache=/tmp/npm-cache && npm run build` to mirror the CI pipeline locally.
