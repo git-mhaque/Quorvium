@@ -23,15 +23,21 @@ This directory contains Terraform configuration that provisions the minimal prod
      --project=quorvium \
      --data-file=client-secret.json
    ```
-5. Initialize the workspace:
+5. Create the Cloud Storage bucket that hosts the staging web client and enable static-site mode:
+   ```sh
+   gsutil mb -p quorvium -l australia-southeast1 gs://staging-quorvium-client
+   gsutil web set -m index.html -e 404.html gs://staging-quorvium-client
+   ```
+   Upload the `client/dist` build with `gsutil -m rsync -r client/dist gs://staging-quorvium-client`.
+6. Initialize the workspace:
    ```sh
    terraform init
    ```
-6. Review the execution plan:
+7. Review the execution plan:
    ```sh
    terraform plan
    ```
-7. Apply the configuration once the plan looks correct:
+8. Apply the configuration once the plan looks correct:
    ```sh
    terraform apply
    ```
@@ -49,3 +55,4 @@ This directory contains Terraform configuration that provisions the minimal prod
     --location=australia-southeast1
   ```
   Ensure the GitHub deployer service account has `roles/artifactregistry.writer` on the project or repository.
+- Static hosting for the client is managed manually via Cloud Storage. Use `gsutil rsync` after each Vite build (or CI deploy job) to keep `gs://staging-quorvium-client` in sync.
