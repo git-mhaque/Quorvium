@@ -153,6 +153,7 @@ jobs:
       VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
       VITE_GOOGLE_REDIRECT_URI: ${{ secrets.VITE_GOOGLE_REDIRECT_URI }}
       VITE_BASE_PATH: ${{ secrets.VITE_BASE_PATH }}
+      VITE_ROUTER_MODE: ${{ secrets.VITE_ROUTER_MODE }}
       STAGING_BUCKET: ${{ secrets.STAGING_BUCKET }}
     steps:
       - name: Checkout repository

@@ -26,6 +26,7 @@ Quorvium uses GitHub environments to isolate staging and production deployment c
 | `VITE_GOOGLE_CLIENT_ID` | Client-side OAuth ID. | Same as `GOOGLE_CLIENT_ID` unless split. | Optional if staging UI uses the same OAuth app. |
 | `VITE_GOOGLE_REDIRECT_URI` | Client redirect URL. | Vite environment config | Typically matches `GOOGLE_REDIRECT_URI`. |
 | `VITE_BASE_PATH` | Base path for Vite asset URLs. | Vite config | Use `./` for Cloud Storage static hosting. |
+| `VITE_ROUTER_MODE` | Client routing strategy. | Frontend runtime config | Use `hash` for raw Cloud Storage hosting; use `browser` when your host supports SPA rewrites. |
 | `STAGING_BUCKET` | Google Cloud Storage bucket URI for static client hosting. | Cloud Storage (`gs://...`) | Example: `gs://staging-quorvium-client`. |
 
 ### Known-Good Staging OAuth Config (March 10, 2026)
@@ -40,6 +41,7 @@ GitHub `staging` environment values that worked together:
 - `GOOGLE_REDIRECT_URI=https://staging-quorvium-client.storage.googleapis.com`
 - `VITE_GOOGLE_REDIRECT_URI=https://staging-quorvium-client.storage.googleapis.com`
 - `VITE_API_BASE_URL=https://quorvium-api-staging-bnr4ohmdsa-ts.a.run.app`
+- `VITE_ROUTER_MODE=hash`
 
 Google OAuth client settings that matched this deployment:
 

@@ -28,6 +28,17 @@ export function HomePage() {
     if (typeof window === 'undefined') {
       return `/boards/${boardId}`;
     }
+
+    if (env.routerMode === 'hash') {
+      const url = new URL(window.location.href);
+      url.search = '';
+      if (!url.pathname || url.pathname === '/') {
+        url.pathname = '/index.html';
+      }
+      url.hash = `/boards/${boardId}`;
+      return url.toString();
+    }
+
     return `${window.location.origin}/boards/${boardId}`;
   }, []);
 
@@ -211,9 +222,11 @@ export function HomePage() {
       return;
     }
     try {
-      const url = new URL(trimmed, window.location.origin);
-      const parts = url.pathname.split('/');
-      const id = parts[parts.length - 1];
+      const url = new URL(trimmed, window.location.href);
+      const hashPath = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
+      const hashMatch = hashPath.match(/^\/boards\/([^/?#]+)/);
+      const pathMatch = url.pathname.match(/\/boards\/([^/?#]+)/);
+      const id = hashMatch?.[1] ?? pathMatch?.[1] ?? trimmed;
       navigate(`/boards/${id}`);
     } catch {
       navigate(`/boards/${trimmed}`);
