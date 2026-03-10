@@ -16,6 +16,15 @@ This directory contains Terraform configuration that provisions the minimal prod
      --location=australia-southeast1
    ```
    Grant the GitHub deployer service account `roles/artifactregistry.writer`.
+   Grant the deployer account permission to act as the Cloud Run runtime service account:
+   ```sh
+   DEPLOYER_SA="quorvium-api-staging@quorvium.iam.gserviceaccount.com"
+   RUNTIME_SA="quorvium-api-staging@quorvium.iam.gserviceaccount.com"
+
+   gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA" \
+   --member="serviceAccount:$DEPLOYER_SA" \
+   --role="roles/iam.serviceAccountUser"
+   ```
 3. Copy `terraform.tfvars.example` to `terraform.tfvars` and fill in project specific values. `cloud_run_image` is only a bootstrap image used when Terraform creates the service for the first time.
 4. Publish the Google OAuth client secret material so Cloud Run can resolve it at runtime:
    ```sh
