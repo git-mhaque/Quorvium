@@ -4,6 +4,7 @@ import { useGoogleLogin } from '@react-oauth/google';
 
 import { createBoard, deleteBoard as deleteBoardRequest, fetchBoardsByOwner } from '../lib/api';
 import { buildBoardUrl } from '../lib/boardUrl';
+import { copyTextToClipboard } from '../lib/clipboard';
 import { env } from '../env';
 import { useAuth } from '../state/auth';
 import type { Board } from '../types';
@@ -60,21 +61,7 @@ export function HomePage() {
     async (boardId: string) => {
       const shareUrl = buildBoardUrl(boardId);
       try {
-        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(shareUrl);
-        } else if (typeof document !== 'undefined') {
-          const textarea = document.createElement('textarea');
-          textarea.value = shareUrl;
-          textarea.setAttribute('readonly', 'true');
-          textarea.style.position = 'absolute';
-          textarea.style.opacity = '0';
-          document.body.appendChild(textarea);
-          textarea.select();
-          document.execCommand('copy');
-          document.body.removeChild(textarea);
-        } else {
-          throw new Error('Clipboard support is unavailable.');
-        }
+        await copyTextToClipboard(shareUrl);
         setCopiedBoardId(boardId);
         setBoardsError(null);
       } catch (err) {
