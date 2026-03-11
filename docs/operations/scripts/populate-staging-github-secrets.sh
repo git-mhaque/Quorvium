@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Populate GitHub secrets for Quorvium staging (old bucket-style hosting).
+# Populate GitHub secrets for Quorvium staging (custom domain hosting).
 # - Repository secrets: GCP_SA_KEY, ARTIFACT_REGISTRY_REPO
 # - Environment secrets (staging): CLIENT_ORIGIN, CLOUD_RUN_SERVICE, ...
 #
@@ -20,17 +20,25 @@ SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_EMAIL:-quorvium-api-staging@quorvium.ia
 
 ARTIFACT_REGISTRY_REPO_VALUE="${ARTIFACT_REGISTRY_REPO_VALUE:-australia-southeast1-docker.pkg.dev/quorvium/quorvium-repo/quorvium-api}"
 
-CLIENT_ORIGIN_VALUE="${CLIENT_ORIGIN_VALUE:-https://staging-quorvium-client.storage.googleapis.com}"
+CLIENT_ORIGIN_VALUE="${CLIENT_ORIGIN_VALUE:-https://staging.quorvium.com}"
 CLOUD_RUN_SERVICE_VALUE="${CLOUD_RUN_SERVICE_VALUE:-quorvium-api-staging}"
 GOOGLE_CLIENT_ID_VALUE="${GOOGLE_CLIENT_ID_VALUE:-588904878485-u39c10ovvhg1imuam4f0jdt979ka4rlh.apps.googleusercontent.com}"
 GOOGLE_CLIENT_SECRET_SECRET_ID_VALUE="${GOOGLE_CLIENT_SECRET_SECRET_ID_VALUE:-google-oauth-client-secret-staging}"
-GOOGLE_REDIRECT_URI_VALUE="${GOOGLE_REDIRECT_URI_VALUE:-https://staging-quorvium-client.storage.googleapis.com}"
-STAGING_BUCKET_VALUE="${STAGING_BUCKET_VALUE:-staging-quorvium-client}"
+GOOGLE_REDIRECT_URI_VALUE="${GOOGLE_REDIRECT_URI_VALUE:-https://staging.quorvium.com}"
+STAGING_BUCKET_VALUE="${STAGING_BUCKET_VALUE:-staging.quorvium.com}"
 VITE_API_BASE_URL_VALUE="${VITE_API_BASE_URL_VALUE:-https://quorvium-api-staging-bnr4ohmdsa-ts.a.run.app}"
-VITE_BASE_PATH_VALUE="${VITE_BASE_PATH_VALUE:-./}"
+VITE_BASE_PATH_VALUE="${VITE_BASE_PATH_VALUE:-/}"
 VITE_GOOGLE_CLIENT_ID_VALUE="${VITE_GOOGLE_CLIENT_ID_VALUE:-588904878485-u39c10ovvhg1imuam4f0jdt979ka4rlh.apps.googleusercontent.com}"
-VITE_GOOGLE_REDIRECT_URI_VALUE="${VITE_GOOGLE_REDIRECT_URI_VALUE:-https://staging-quorvium-client.storage.googleapis.com}"
-VITE_ROUTER_MODE_VALUE="${VITE_ROUTER_MODE_VALUE:-${VITE_ROUTER_MOD:-hash}}"
+VITE_GOOGLE_REDIRECT_URI_VALUE="${VITE_GOOGLE_REDIRECT_URI_VALUE:-https://staging.quorvium.com}"
+VITE_ROUTER_MODE_VALUE="${VITE_ROUTER_MODE_VALUE:-${VITE_ROUTER_MOD:-browser}}"
+
+# Normalize origin-style URLs to avoid redirect_uri mismatch from trailing slash differences.
+for origin_like_var in CLIENT_ORIGIN_VALUE GOOGLE_REDIRECT_URI_VALUE VITE_GOOGLE_REDIRECT_URI_VALUE; do
+  value="${!origin_like_var}"
+  if [[ "${value}" =~ ^https?://[^/]+/$ ]]; then
+    printf -v "${origin_like_var}" '%s' "${value%/}"
+  fi
+done
 
 if [[ "${STAGING_BUCKET_VALUE}" != gs://* ]]; then
   STAGING_BUCKET_VALUE="gs://${STAGING_BUCKET_VALUE}"

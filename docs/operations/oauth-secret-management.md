@@ -36,6 +36,7 @@ gcloud config set compute/region australia-southeast1
   - Terraform variables (`google_client_id`, `google_redirect_uri`, `client_origin`).
   - GitHub environment secrets (`GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI`, `CLIENT_ORIGIN`, and the Vite equivalents).
   - `.env.example` files if the change impacts local development.
+- Redirect URI values must match exactly between app config and Google OAuth credentials. `https://staging.quorvium.com` and `https://staging.quorvium.com/` are different.
 
 ## Incident Response: Compromised OAuth Secret
 

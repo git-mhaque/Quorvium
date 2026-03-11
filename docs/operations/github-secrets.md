@@ -9,7 +9,7 @@ Quorvium uses GitHub environments to isolate staging and production deployment c
 - Values that also exist in Google Secret Manager should be rotated there first; update GitHub secrets immediately afterward.
 - Use short-lived JSON service account keys (`gcloud iam service-accounts keys create`) for automation and rotate quarterly.
 
-## One-Command Bootstrap (Staging, Bucket-Style Hosting)
+## One-Command Bootstrap (Staging, Custom Domain Hosting)
 
 Use the helper script to populate all required staging + repository secrets in one run:
 
@@ -31,9 +31,9 @@ Script behavior:
 
 - Creates a new service account key for `quorvium-api-staging@quorvium.iam.gserviceaccount.com` and sets repo secret `GCP_SA_KEY`.
 - Sets repo secret `ARTIFACT_REGISTRY_REPO=australia-southeast1-docker.pkg.dev/quorvium/quorvium-repo/quorvium-api`.
-- Sets all required `staging` environment secrets for the current bucket-style deployment.
+- Sets all required `staging` environment secrets for the current custom-domain deployment.
 - Normalizes `STAGING_BUCKET` to `gs://...` because CI requires that prefix.
-- Sets `VITE_ROUTER_MODE=hash` (the CI/workflow key name is `VITE_ROUTER_MODE`).
+- Sets `VITE_ROUTER_MODE=browser` (the CI/workflow key name is `VITE_ROUTER_MODE`).
 
 ## Staging Environment (`staging`)
 
@@ -46,38 +46,41 @@ Script behavior:
 | `ARTIFACT_REGISTRY_REPO` | Repository path for container images. | Artifact Registry | Format: `australia-southeast1-docker.pkg.dev/quorvium/quorvium-repo/quorvium-api`. |
 | `GOOGLE_CLIENT_ID` | OAuth client ID used by the API. | Google OAuth credentials | Used by the API deploy job (`gcloud run deploy --set-env-vars`). |
 | `GOOGLE_CLIENT_SECRET_SECRET_ID` | Secret Manager secret ID containing OAuth client secret. | Secret Manager | Example: `google-oauth-client-secret-staging`; deploy job binds `GOOGLE_CLIENT_SECRET` from `latest`. |
-| `GOOGLE_REDIRECT_URI` | OAuth redirect for staging Cloud Run domain. | Application config | e.g., `https://staging.quorvium.dev/oauth/callback`. |
-| `CLIENT_ORIGIN` | Frontend origin allowed by CORS. | Vite deployment config | e.g., `https://staging.quorvium.dev`. |
+| `GOOGLE_REDIRECT_URI` | OAuth redirect URI for the staging client. | Application config | e.g., `https://staging.quorvium.com`. |
+| `CLIENT_ORIGIN` | Frontend origin allowed by CORS. | Vite deployment config | e.g., `https://staging.quorvium.com`. |
 | `VITE_API_BASE_URL` | API base URL injected into client build. | Cloud Run URL | Example: `https://quorvium-api-staging-a4nw.run.app`. |
 | `VITE_GOOGLE_CLIENT_ID` | Client-side OAuth ID. | Same as `GOOGLE_CLIENT_ID` unless split. | Optional if staging UI uses the same OAuth app. |
 | `VITE_GOOGLE_REDIRECT_URI` | Client redirect URL. | Vite environment config | Typically matches `GOOGLE_REDIRECT_URI`. |
-| `VITE_BASE_PATH` | Base path for Vite asset URLs. | Vite config | Use `./` for Cloud Storage static hosting. |
-| `VITE_ROUTER_MODE` | Client routing strategy. | Frontend runtime config | Use `hash` for raw Cloud Storage hosting; use `browser` when your host supports SPA rewrites. |
-| `STAGING_BUCKET` | Google Cloud Storage bucket URI for static client hosting. | Cloud Storage (`gs://...`) | Example: `gs://staging-quorvium-client`. |
+| `VITE_BASE_PATH` | Base path for Vite asset URLs. | Vite config | Use `/` for domain root hosting (`staging.quorvium.com`). |
+| `VITE_ROUTER_MODE` | Client routing strategy. | Frontend runtime config | Use `browser` for the custom-domain setup behind HTTPS LB. |
+| `STAGING_BUCKET` | Google Cloud Storage bucket URI for static client hosting. | Cloud Storage (`gs://...`) | Example: `gs://staging.quorvium.com`. |
 
-### Known-Good Staging OAuth Config (March 10, 2026)
+### Known-Good Staging OAuth Config (March 11, 2026)
 
 Current verified staging app host:
 
-- `https://staging-quorvium-client.storage.googleapis.com/index.html`
+- `https://staging.quorvium.com`
 
 GitHub `staging` environment values that worked together:
 
-- `CLIENT_ORIGIN=https://staging-quorvium-client.storage.googleapis.com`
-- `GOOGLE_REDIRECT_URI=https://staging-quorvium-client.storage.googleapis.com`
-- `VITE_GOOGLE_REDIRECT_URI=https://staging-quorvium-client.storage.googleapis.com`
+- `CLIENT_ORIGIN=https://staging.quorvium.com`
+- `GOOGLE_REDIRECT_URI=https://staging.quorvium.com`
+- `VITE_GOOGLE_REDIRECT_URI=https://staging.quorvium.com`
 - `VITE_API_BASE_URL=https://quorvium-api-staging-bnr4ohmdsa-ts.a.run.app`
-- `VITE_ROUTER_MODE=hash`
+- `VITE_BASE_PATH=/`
+- `VITE_ROUTER_MODE=browser`
+- `STAGING_BUCKET=gs://staging.quorvium.com`
 
 Google OAuth client settings that matched this deployment:
 
-- Authorized JavaScript origin: `https://staging-quorvium-client.storage.googleapis.com`
-- Authorized redirect URI: `https://staging-quorvium-client.storage.googleapis.com/`
+- Authorized JavaScript origin: `https://staging.quorvium.com`
+- Authorized redirect URI: `https://staging.quorvium.com`
 
 Notes:
 
-- The raw bucket URL (`https://storage.googleapis.com/staging-quorvium-client/index.html`) uses a different origin and can cause OAuth/CORS mismatch.
+- The old bucket URL (`https://staging-quorvium-client.storage.googleapis.com/index.html`) is a different origin and can cause OAuth/CORS mismatch if mixed with the new domain config.
 - Ensure Secret Manager value for `google-oauth-client-secret-staging` is the raw `client_secret` string, not full JSON.
+- Google redirect URI matching is exact. `https://staging.quorvium.com` and `https://staging.quorvium.com/` are treated as different values.
 
 ## Production Environment (`production`)
 
