@@ -3,6 +3,21 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Board, StickyNote } from '../types';
 
 const NOTE_COLORS = ['#fde68a', '#fca5a5', '#bfdbfe', '#bbf7d0', '#f5d0fe'];
+const BASE_BOARD_WIDTH = 1600;
+const BASE_BOARD_HEIGHT = 1200;
+const BOARD_PADDING = 600;
+const NOTE_WIDTH = 220;
+const NOTE_MIN_HEIGHT = 180;
+
+export function sanitizeNotePosition(x: number, y: number): { x: number; y: number } | null {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+  return {
+    x: Math.max(0, x),
+    y: Math.max(0, y)
+  };
+}
 
 interface BoardCanvasProps {
   board: Board;
@@ -33,11 +48,39 @@ export function BoardCanvas({ board, onCreateNote, onUpdateNote, onDeleteNote }:
     setDragPreview({});
   }, [board.id]);
 
-  const getNotePosition = (note: StickyNote) => dragPreview[note.id] ?? { x: note.x, y: note.y };
+  const notePositions = useMemo(() => {
+    return notes.reduce<Record<string, { x: number; y: number }>>((acc, note) => {
+      const preview = dragPreview[note.id];
+      const source = preview ?? { x: note.x, y: note.y };
+      acc[note.id] = sanitizeNotePosition(source.x, source.y) ?? { x: 0, y: 0 };
+      return acc;
+    }, {});
+  }, [dragPreview, notes]);
+
+  const boardSize = useMemo(() => {
+    const minWidth = Math.ceil(BASE_BOARD_WIDTH / scale);
+    const minHeight = Math.ceil(BASE_BOARD_HEIGHT / scale);
+
+    let maxRight = 0;
+    let maxBottom = 0;
+    Object.values(notePositions).forEach((position) => {
+      maxRight = Math.max(maxRight, position.x + NOTE_WIDTH);
+      maxBottom = Math.max(maxBottom, position.y + NOTE_MIN_HEIGHT);
+    });
+
+    return {
+      width: Math.max(minWidth, maxRight + BOARD_PADDING),
+      height: Math.max(minHeight, maxBottom + BOARD_PADDING)
+    };
+  }, [notePositions, scale]);
+
+  const getNotePosition = (note: StickyNote) => notePositions[note.id] ?? { x: 0, y: 0 };
 
   const handleNotePointerDown = (note: StickyNote, event: React.PointerEvent<HTMLDivElement>) => {
     event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (event.currentTarget.setPointerCapture) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
     const position = getNotePosition(note);
     dragState.current = {
       noteId: note.id,
@@ -50,25 +93,42 @@ export function BoardCanvas({ board, onCreateNote, onUpdateNote, onDeleteNote }:
   };
 
   const handleNotePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragState.current || dragState.current.pointerId !== event.pointerId) {
+    const currentDrag = dragState.current;
+    if (!currentDrag || currentDrag.pointerId !== event.pointerId) {
       return;
     }
-    const deltaX = (event.clientX - dragState.current.originX) / scale;
-    const deltaY = (event.clientY - dragState.current.originY) / scale;
-    const nextX = dragState.current.startX + deltaX;
-    const nextY = dragState.current.startY + deltaY;
+    const deltaX = (event.clientX - currentDrag.originX) / scale;
+    const deltaY = (event.clientY - currentDrag.originY) / scale;
+    const nextPosition = sanitizeNotePosition(
+      currentDrag.startX + deltaX,
+      currentDrag.startY + deltaY
+    );
+    if (!nextPosition) {
+      return;
+    }
+    const { noteId } = currentDrag;
     setDragPreview((prev) => ({
       ...prev,
-      [dragState.current!.noteId]: { x: nextX, y: nextY }
+      [noteId]: nextPosition
     }));
   };
 
   const handleNotePointerUp = (note: StickyNote, event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragState.current || dragState.current.pointerId !== event.pointerId) {
+    const currentDrag = dragState.current;
+    if (!currentDrag || currentDrag.pointerId !== event.pointerId) {
       return;
     }
-    event.currentTarget.releasePointerCapture(event.pointerId);
-    const position = getNotePosition(note);
+    if (
+      event.currentTarget.releasePointerCapture &&
+      (!event.currentTarget.hasPointerCapture || event.currentTarget.hasPointerCapture(event.pointerId))
+    ) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const currentPosition = getNotePosition(note);
+    const position = sanitizeNotePosition(currentPosition.x, currentPosition.y) ?? {
+      x: Math.max(0, note.x),
+      y: Math.max(0, note.y)
+    };
     setDragPreview((prev) => {
       const next = { ...prev };
       delete next[note.id];
@@ -89,7 +149,9 @@ export function BoardCanvas({ board, onCreateNote, onUpdateNote, onDeleteNote }:
       offsetX: offset.x,
       offsetY: offset.y
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (event.currentTarget.setPointerCapture) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
   };
 
   const handlePanMove = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -109,7 +171,12 @@ export function BoardCanvas({ board, onCreateNote, onUpdateNote, onDeleteNote }:
       return;
     }
     isPanning.current = false;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    if (
+      event.currentTarget.releasePointerCapture &&
+      (!event.currentTarget.hasPointerCapture || event.currentTarget.hasPointerCapture(event.pointerId))
+    ) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   };
 
   return (
@@ -171,12 +238,13 @@ export function BoardCanvas({ board, onCreateNote, onUpdateNote, onDeleteNote }:
         onPointerDown={handlePanStart}
         onPointerMove={handlePanMove}
         onPointerUp={handlePanEnd}
+        onPointerCancel={handlePanEnd}
         onPointerLeave={handlePanEnd}
       >
         <div
           style={{
-            width: '1600px',
-            height: '1200px',
+            width: `${boardSize.width}px`,
+            height: `${boardSize.height}px`,
             transform: `translate(${offset.x}px, ${offset.y}px)`
           }}
         >
@@ -213,6 +281,7 @@ export function BoardCanvas({ board, onCreateNote, onUpdateNote, onDeleteNote }:
                     onPointerDown={(event) => handleNotePointerDown(note, event)}
                     onPointerMove={handleNotePointerMove}
                     onPointerUp={(event) => handleNotePointerUp(note, event)}
+                    onPointerCancel={(event) => handleNotePointerUp(note, event)}
                     onPointerLeave={(event) => handleNotePointerUp(note, event)}
                     style={{
                       padding: '0.5rem 0.75rem',
