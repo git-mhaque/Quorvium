@@ -24,6 +24,8 @@ Populate environment values before starting the app:
 |                   | `GOOGLE_REDIRECT_URI`        | `http://localhost:5173/`         |
 |                   | `CLIENT_ORIGIN`              | `http://localhost:5173`          |
 | `client/.env`     | `VITE_API_BASE_URL`          | `http://localhost:4000`          |
+|                   | `VITE_BASE_PATH`             | `./` (Cloud Storage/static hosting default) |
+|                   | `VITE_ROUTER_MODE`           | `browser` (use `hash` for static hosting without rewrites) |
 |                   | `VITE_GOOGLE_CLIENT_ID`      | same as server                   |
 |                   | `VITE_GOOGLE_REDIRECT_URI`   | `http://localhost:5173/`         |
 
@@ -46,15 +48,23 @@ npm run dev
 ```bash
 npm test --cache=/tmp/npm-cache      # Run server + client Vitest suites
 npm run lint  # ESLint across both workspaces
+npm run typecheck # Type-check server + client
 npm run build # Type-check & build bundles
 ```
 
-The exchange of Google authorization codes happens in `server/src/routes/auth.ts`, which stores access/refresh tokens inside secure HTTP-only cookies (`quorvium_google_access`, `quorvium_google_refresh`). These cookies are required for subsequent Google API access—no tokens are exposed to the browser.
+CI parity check before PR:
+
+```bash
+npm run lint && npm run typecheck && npm run test --cache=/tmp/npm-cache && npm run build
+```
+
+The exchange of Google authorization codes happens in `server/src/routes/auth.ts`, which stores access/refresh tokens inside secure HTTP-only cookies (`quorvium_google_access`, `quorvium_google_refresh`). These cookies support future server-side Google API integrations while keeping raw tokens out of browser JavaScript.
 
 ## Project structure
 
 - `client/` – React UI, Google auth, board canvas, Socket.IO client
 - `server/` – Express API, Google token verification, Socket.IO hub
-- `docs/spec.md` – Canonical product requirements
-- `docs/` – Supporting documentation (legacy specs, diagrams, notes)
+- `docs/SPEC.md` – Canonical product requirements
+- `docs/ARCHITECTURE.md` – System architecture and runtime topology
+- `docs/` – Supporting documentation (operations, plans, and runbooks)
 - `AGENTS.md` – Contributor workflow guide

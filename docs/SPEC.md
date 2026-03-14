@@ -2,10 +2,12 @@
 
 ## Overview
 Quorvium is a collaborative whiteboard for distributed teams to capture and organize ideas in real time. The application consists of a React/Vite client and an Express + Socket.IO backend, with TypeScript across the stack.
+Implementation details and runtime topology are documented in `ARCHITECTURE.md`.
 
 ## Authentication & Access
-- **Google Sign-In (OAuth 2.0):** Only Google-authenticated users can create boards. Authorization codes are exchanged server-side and stored in secure HTTP-only cookies.
-- **Shared Access Links:** Visitors without Google accounts can open a board URL shared by teammates, but they collaborate anonymously and cannot create new boards.
+- **Google Sign-In (OAuth 2.0):** Product behavior requires Google-authenticated users to create boards. The current UX enforces this at the client layer.
+- **Shared Access Links:** Visitors without Google accounts can open a board URL shared by teammates and collaborate anonymously.
+- **Current hardening gap:** API endpoints do not yet enforce ownership/auth claims server-side for board creation/deletion.
 
 ## Board Lifecycle
 - **Creation:** Authenticated users provide a name and receive a shareable `/boards/:id` URL. Owner metadata (id, name, email, avatar) is persisted.
@@ -18,10 +20,12 @@ Quorvium is a collaborative whiteboard for distributed teams to capture and orga
 - Presence is indicated via lightweight participant join notifications.
 
 ## Security & Tokens
-- OAuth refresh and access tokens are written to `quorvium_google_refresh` and `quorvium_google_access` cookies (secure, HTTP-only, `SameSite=Lax`). Add a token-refresh endpoint before calling downstream Google APIs.
+- OAuth refresh and access tokens are written to `quorvium_google_refresh` and `quorvium_google_access` cookies (secure, HTTP-only, `SameSite=Lax`) when Google returns those tokens via authorization-code exchange.
+- Add a token-refresh endpoint before calling downstream Google APIs from authenticated server workflows.
 - Environment variables: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `CLIENT_ORIGIN`, `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_REDIRECT_URI`, `VITE_API_BASE_URL`.
 
 ## Testing & Tooling
+- Root quality commands: `npm run lint`, `npm run typecheck`, `npm test --cache=/tmp/npm-cache`, `npm run build`.
 - `npm test --workspace=server` runs integration tests that exercise REST + websockets.
 - `npm test --workspace=client` covers landing page auth gating.
 - ESLint/Prettier enforcement via `npm run lint` / `npm run format`.

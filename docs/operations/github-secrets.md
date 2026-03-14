@@ -1,6 +1,6 @@
 # GitHub Environment Secrets Map
 
-Quorvium uses GitHub environments to isolate staging and production deployment credentials. Populate the secrets below before enabling the CI/CD deployment gates. Keep values synchronized with Google Secret Manager to avoid drift.
+Quorvium currently uses a GitHub `staging` environment for deployment credentials. Populate the secrets below before enabling CI/CD deployment gates. Keep values synchronized with Google Secret Manager to avoid drift.
 
 ## Shared Conventions
 
@@ -82,27 +82,8 @@ Notes:
 - Ensure Secret Manager value for `google-oauth-client-secret-staging` is the raw `client_secret` string, not full JSON.
 - Google redirect URI matching is exact. `https://staging.quorvium.com` and `https://staging.quorvium.com/` are treated as different values.
 
-## Production Environment (`production`)
-
-| Secret Name | Description | Source of Truth | Notes |
-| --- | --- | --- | --- |
-| `GCP_PROJECT_ID` | Production GCP project ID. | Terraform remote state / infra repo | Example: `quorvium-prod`. |
-| `GCP_REGION` | Deployment region (default `us-central1`). | Terraform variables | Keep aligned with staging for parity. |
-| `GCP_SA_KEY` | JSON key for production deployer service account. | Google Cloud IAM | Assign least privilege + audit key rotation monthly. |
-| `CLOUD_RUN_SERVICE` | Production Cloud Run service name. | Terraform output | e.g., `quorvium-api-production`. |
-| `ARTIFACT_REGISTRY_REPO` | Production Artifact Registry repository. | Artifact Registry | Format: `us-central1-docker.pkg.dev/quorvium-prod/api`. |
-| `GOOGLE_CLIENT_ID` | Production OAuth client ID. | Google OAuth credentials | Used by the API deploy job (`gcloud run deploy --set-env-vars`). |
-| `GOOGLE_CLIENT_SECRET_SECRET_ID` | Secret Manager secret ID containing production OAuth client secret. | Secret Manager | Example: `google-oauth-client-secret-production`; deploy job binds `GOOGLE_CLIENT_SECRET` from `latest`. |
-| `GOOGLE_REDIRECT_URI` | Production redirect URI. | Application config | e.g., `https://app.quorvium.com/oauth/callback`. |
-| `CLIENT_ORIGIN` | Production frontend origin. | DNS + CDN config | e.g., `https://app.quorvium.com`. |
-| `VITE_API_BASE_URL` | Production API base for client. | Cloud Run URL or custom domain | Example: `https://api.quorvium.com`. |
-| `VITE_GOOGLE_CLIENT_ID` | Client-side OAuth ID for production. | OAuth credentials | Use separate OAuth app if scoped differently. |
-| `VITE_GOOGLE_REDIRECT_URI` | Client redirect. | Frontend config | Usually matches `GOOGLE_REDIRECT_URI`. |
-| `SENTRY_DSN` | (Reserved) Error tracking DSN when enabled. | Sentry project settings | Placeholder until monitoring work lands. |
-| `SLACK_WEBHOOK_URL` | (Optional) Notifications for deployments/incidents. | Slack App config | Required once deploy gates notify Slack. |
-
 ## Next Steps
 
 - Automate diff checks that compare Terraform outputs with GitHub secret values during pipeline runs.
 - Keep `.github/workflows/ci.yml` in sync with this map; the staging Cloud Run deploy job now reads project/region/service plus runtime OAuth and CORS settings from the `staging` environment.
-- Document rotation history and owners in `docs/operations/ops-log.md`.
+- Document rotation history and owners in your team runbook/process notes.

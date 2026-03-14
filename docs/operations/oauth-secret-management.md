@@ -55,4 +55,4 @@ gcloud config set compute/region australia-southeast1
 ## Storage Revisit Trigger
 
 - Monitor the frequency of instance restarts. Because data lives in `/tmp/quorvium-data`, any restart erases boards.
-- Once testing requires persistence across deploys or multiple instances, migrate back to the Cloud SQL plan captured in [Productionization Plan](../production-plan.md) and extend Terraform accordingly.
+- Once testing requires persistence across deploys or multiple instances, migrate to the Cloud SQL plan captured in the [Production Plan](../PRODUCTION_READINESS_PLAN.md) and extend Terraform accordingly.
