@@ -2,8 +2,7 @@
 set -euo pipefail
 
 # Populate GitHub secrets for Quorvium staging (custom domain hosting).
-# - Repository secrets: GCP_SA_KEY, ARTIFACT_REGISTRY_REPO
-# - Environment secrets (staging): CLIENT_ORIGIN, CLOUD_RUN_SERVICE, ...
+# - Environment secrets (staging): GCP_SA_KEY, ARTIFACT_REGISTRY_REPO, CLIENT_ORIGIN, CLOUD_RUN_SERVICE, ...
 #
 # Usage:
 #   bash docs/operations/scripts/populate-staging-github-secrets.sh
@@ -18,7 +17,7 @@ PROJECT_ID="${PROJECT_ID:-quorvium}"
 REGION="${REGION:-australia-southeast1}"
 SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_EMAIL:-quorvium-api-staging@quorvium.iam.gserviceaccount.com}"
 
-ARTIFACT_REGISTRY_REPO_VALUE="${ARTIFACT_REGISTRY_REPO_VALUE:-australia-southeast1-docker.pkg.dev/quorvium/quorvium-repo/quorvium-api}"
+ARTIFACT_REGISTRY_REPO_VALUE="${ARTIFACT_REGISTRY_REPO_VALUE:-australia-southeast1-docker.pkg.dev/quorvium/quorvium-staging-repo/quorvium-api}"
 
 CLIENT_ORIGIN_VALUE="${CLIENT_ORIGIN_VALUE:-https://staging.quorvium.com}"
 CLOUD_RUN_SERVICE_VALUE="${CLOUD_RUN_SERVICE_VALUE:-quorvium-api-staging}"
@@ -93,34 +92,6 @@ if [[ -n "${REPO_SLUG}" ]]; then
   GH_ARGS+=(--repo "${REPO_SLUG}")
 fi
 
-set_repo_secret_body() {
-  local name="$1"
-  local value="$2"
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "[dry-run] gh secret set ${name} ${GH_ARGS[*]-} --body '<redacted>'"
-    return
-  fi
-  if [[ ${#GH_ARGS[@]} -gt 0 ]]; then
-    gh secret set "${name}" "${GH_ARGS[@]}" --body "${value}"
-  else
-    gh secret set "${name}" --body "${value}"
-  fi
-}
-
-set_repo_secret_file() {
-  local name="$1"
-  local file="$2"
-  if [[ "${DRY_RUN}" == "true" ]]; then
-    echo "[dry-run] gh secret set ${name} ${GH_ARGS[*]-} < ${file}"
-    return
-  fi
-  if [[ ${#GH_ARGS[@]} -gt 0 ]]; then
-    gh secret set "${name}" "${GH_ARGS[@]}" < "${file}"
-  else
-    gh secret set "${name}" < "${file}"
-  fi
-}
-
 set_env_secret() {
   local name="$1"
   local value="$2"
@@ -132,6 +103,20 @@ set_env_secret() {
     gh secret set "${name}" --env "${ENV_NAME}" "${GH_ARGS[@]}" --body "${value}"
   else
     gh secret set "${name}" --env "${ENV_NAME}" --body "${value}"
+  fi
+}
+
+set_env_secret_file() {
+  local name="$1"
+  local file="$2"
+  if [[ "${DRY_RUN}" == "true" ]]; then
+    echo "[dry-run] gh secret set ${name} --env ${ENV_NAME} ${GH_ARGS[*]-} < ${file}"
+    return
+  fi
+  if [[ ${#GH_ARGS[@]} -gt 0 ]]; then
+    gh secret set "${name}" --env "${ENV_NAME}" "${GH_ARGS[@]}" < "${file}"
+  else
+    gh secret set "${name}" --env "${ENV_NAME}" < "${file}"
   fi
 }
 
@@ -149,11 +134,9 @@ else
     --project="${PROJECT_ID}" >/dev/null
 fi
 
-echo "Setting repository secrets..."
-set_repo_secret_file "GCP_SA_KEY" "${tmp_key}"
-set_repo_secret_body "ARTIFACT_REGISTRY_REPO" "${ARTIFACT_REGISTRY_REPO_VALUE}"
-
 echo "Setting ${ENV_NAME} environment secrets..."
+set_env_secret_file "GCP_SA_KEY" "${tmp_key}"
+set_env_secret "ARTIFACT_REGISTRY_REPO" "${ARTIFACT_REGISTRY_REPO_VALUE}"
 set_env_secret "CLIENT_ORIGIN" "${CLIENT_ORIGIN_VALUE}"
 set_env_secret "CLOUD_RUN_SERVICE" "${CLOUD_RUN_SERVICE_VALUE}"
 set_env_secret "GCP_PROJECT_ID" "${PROJECT_ID}"
@@ -171,5 +154,5 @@ set_env_secret "VITE_ROUTER_MODE" "${VITE_ROUTER_MODE_VALUE}"
 echo "Done."
 echo "Notes:"
 echo "- STAGING_BUCKET was set to ${STAGING_BUCKET_VALUE}"
-echo "- A new service account key was created for ${SERVICE_ACCOUNT_EMAIL} and uploaded to GCP_SA_KEY."
+echo "- A new service account key was created for ${SERVICE_ACCOUNT_EMAIL} and uploaded to ${ENV_NAME} secret GCP_SA_KEY."
 echo "- Rotate and prune old keys periodically: gcloud iam service-accounts keys list --iam-account=${SERVICE_ACCOUNT_EMAIL} --project=${PROJECT_ID}"

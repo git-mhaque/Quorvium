@@ -8,13 +8,14 @@ This directory contains Terraform configuration that provisions the minimal prod
 ## Getting Started
 
 1. Install Terraform `>= 1.6.0` and authenticate with Google Cloud (`gcloud auth application-default login`).
-2. Create the Artifact Registry repository referenced by `cloud_run_image` (only once per project):
+2. Create environment-specific Artifact Registry repositories referenced by `cloud_run_image` (each repository is created once per project):
    ```sh
-   gcloud artifacts repositories create quorvium-repo \
+   gcloud artifacts repositories create quorvium-staging-repo \
      --project=quorvium \
      --repository-format=docker \
      --location=australia-southeast1
    ```
+   Use separate repositories per environment (for example `quorvium-staging-repo` and `quorvium-prod-repo`), and create each repository once.
    Grant the GitHub deployer service account `roles/artifactregistry.writer`.
    Grant the deployer account permission to act as the Cloud Run runtime service account:
    ```sh
@@ -49,7 +50,7 @@ This directory contains Terraform configuration that provisions the minimal prod
    gsutil iam ch allUsers:objectViewer gs://staging-quorvium-client
    ```
    Upload the `client/dist` build with `gsutil -m rsync -r client/dist gs://staging-quorvium-client`. The CI workflow expects GitHub environment secrets named `STAGING_BUCKET` (`gs://staging-quorvium-client`) and `VITE_BASE_PATH` (use `./` for Cloud Storage hosting) so Vite emits the correct asset URLs.
-6. In the GitHub `staging` environment, configure Cloud Run deploy settings used by `.github/workflows/ci.yml`: `GCP_PROJECT_ID`, `GCP_REGION`, `CLOUD_RUN_SERVICE`, `CLIENT_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI`, and `GOOGLE_CLIENT_SECRET_SECRET_ID`.
+6. In the GitHub `staging` environment, configure deploy settings used by `.github/workflows/ci.yml`: `GCP_SA_KEY`, `ARTIFACT_REGISTRY_REPO`, `GCP_PROJECT_ID`, `GCP_REGION`, `CLOUD_RUN_SERVICE`, `CLIENT_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI`, and `GOOGLE_CLIENT_SECRET_SECRET_ID`.
 7. Initialize the workspace:
    ```sh
    terraform init
@@ -88,7 +89,7 @@ This directory contains Terraform configuration that provisions the minimal prod
 - Remote state (GCS bucket + locking) is not yet configured; add this before running in a shared environment.
 - Artifact Registry repositories are not created automatically. Before running the CI workflow or Terraform apply, create the Docker repository referenced by `cloud_run_image`, for example:
   ```sh
-  gcloud artifacts repositories create quorvium-repo \
+  gcloud artifacts repositories create quorvium-staging-repo \
     --project=quorvium \
     --repository-format=docker \
     --location=australia-southeast1
