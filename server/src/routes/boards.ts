@@ -23,6 +23,11 @@ const boardIdParamsSchema = z.object({
   boardId: z.string().min(1)
 });
 
+const renameBoardSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  requesterId: z.string().min(1)
+});
+
 export const boardsRouter = Router();
 
 boardsRouter.post('/', async (req, res, next) => {
@@ -59,6 +64,31 @@ boardsRouter.get('/:boardId', async (req, res, next) => {
       return res.status(404).json({ error: 'Board not found' });
     }
     res.json({ board });
+  } catch (error) {
+    next(error);
+  }
+});
+
+boardsRouter.patch('/:boardId', async (req, res, next) => {
+  try {
+    const { boardId } = boardIdParamsSchema.parse(req.params);
+    const payload = renameBoardSchema.parse(req.body);
+    const board = await boardStore.getBoard(boardId);
+
+    if (!board) {
+      return res.status(404).json({ error: 'Board not found' });
+    }
+
+    if (board.owner?.id !== payload.requesterId) {
+      return res.status(403).json({ error: 'Only board creator can rename this board' });
+    }
+
+    const updated = await boardStore.renameBoard(boardId, payload.name);
+    if (!updated) {
+      return res.status(404).json({ error: 'Board not found' });
+    }
+
+    res.json({ board: updated });
   } catch (error) {
     next(error);
   }

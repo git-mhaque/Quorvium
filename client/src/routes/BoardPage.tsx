@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { BoardCanvas } from '../components/BoardCanvas';
-import { fetchBoard } from '../lib/api';
+import { fetchBoard, renameBoard } from '../lib/api';
 import { buildBoardUrl } from '../lib/boardUrl';
 import { copyTextToClipboard } from '../lib/clipboard';
 import { createBoardSocket } from '../lib/socket';
@@ -18,7 +18,11 @@ export function BoardPage() {
   const [fatalError, setFatalError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [participants, setParticipants] = useState<number>(1);
+  const [isEditingBoardName, setIsEditingBoardName] = useState(false);
+  const [boardNameDraft, setBoardNameDraft] = useState('');
+  const [isSavingBoardName, setIsSavingBoardName] = useState(false);
   const socketRef = useRef<BoardSocket>(createBoardSocket());
+  const boardNameInputRef = useRef<HTMLInputElement>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   const shareUrl = useMemo(() => {
@@ -27,6 +31,23 @@ export function BoardPage() {
     }
     return buildBoardUrl(boardId);
   }, [boardId]);
+
+  const isBoardCreator = Boolean(user && board && board.owner?.id === user.id);
+
+  useEffect(() => {
+    if (!board || isEditingBoardName) {
+      return;
+    }
+    setBoardNameDraft(board.name);
+  }, [board, isEditingBoardName]);
+
+  useEffect(() => {
+    if (!isEditingBoardName) {
+      return;
+    }
+    boardNameInputRef.current?.focus();
+    boardNameInputRef.current?.select();
+  }, [isEditingBoardName]);
 
   useEffect(() => {
     if (!boardId) {
@@ -168,6 +189,55 @@ export function BoardPage() {
       socketRef.current = createBoardSocket();
     };
   }, [boardId, user]);
+
+  const startBoardNameEditing = () => {
+    if (!board || !isBoardCreator) {
+      return;
+    }
+    setBoardNameDraft(board.name);
+    setIsEditingBoardName(true);
+  };
+
+  const cancelBoardNameEditing = () => {
+    setBoardNameDraft(board?.name ?? '');
+    setIsEditingBoardName(false);
+    setIsSavingBoardName(false);
+  };
+
+  const submitBoardName = async () => {
+    if (!board || !user || !isBoardCreator) {
+      return;
+    }
+
+    const nextName = boardNameDraft.trim();
+    if (!nextName) {
+      setFeedback('Board name cannot be empty.');
+      return;
+    }
+    if (nextName === board.name) {
+      setIsEditingBoardName(false);
+      setFeedback(null);
+      return;
+    }
+
+    setIsSavingBoardName(true);
+    try {
+      const updatedBoard = await renameBoard(board.id, {
+        name: nextName,
+        requesterId: user.id
+      });
+      setBoard(updatedBoard);
+      setIsEditingBoardName(false);
+      setFeedback(null);
+    } catch (err) {
+      const apiError = (
+        err as { response?: { data?: { error?: string } } } | undefined
+      )?.response?.data?.error;
+      setFeedback(apiError ?? 'Could not rename board.');
+    } finally {
+      setIsSavingBoardName(false);
+    }
+  };
 
   const handleCreateNote = (noteOverride?: Partial<Pick<StickyNote, 'body' | 'color'>>) => {
     if (!socketRef.current || !boardId) {
@@ -335,7 +405,79 @@ export function BoardPage() {
     >
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '1.9rem' }}>{board.name}</h1>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+            {isEditingBoardName ? (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void submitBoardName();
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}
+              >
+                <input
+                  ref={boardNameInputRef}
+                  className="input"
+                  aria-label="Board name"
+                  value={boardNameDraft}
+                  maxLength={80}
+                  disabled={isSavingBoardName}
+                  onChange={(event) => setBoardNameDraft(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      cancelBoardNameEditing();
+                    }
+                  }}
+                  style={{
+                    width: 'min(28rem, 75vw)',
+                    fontSize: '1.1rem',
+                    fontWeight: 600,
+                    padding: '0.45rem 0.65rem'
+                  }}
+                />
+                <button className="btn btn-secondary" type="submit" disabled={isSavingBoardName}>
+                  {isSavingBoardName ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  disabled={isSavingBoardName}
+                  onClick={cancelBoardNameEditing}
+                >
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <>
+                <h1 style={{ margin: 0, fontSize: '1.9rem' }}>{board.name}</h1>
+                {isBoardCreator && (
+                  <button
+                    className="btn btn-secondary"
+                    type="button"
+                    aria-label="Rename board"
+                    title="Rename board"
+                    onClick={startBoardNameEditing}
+                    style={{ padding: '0.35rem 0.55rem', minWidth: 'auto' }}
+                  >
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      width="16"
+                      height="16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M12 20h9" />
+                      <path d="m16.5 3.5 4 4L7 21H3v-4z" />
+                    </svg>
+                  </button>
+                )}
+              </>
+            )}
+          </div>
           <p style={{ margin: '0.35rem 0', color: 'rgba(226,232,240,0.75)', fontSize: '0.95rem' }}>
             Share this link with your team: <code>{shareUrl}</code>
           </p>

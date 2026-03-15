@@ -30,6 +30,16 @@ export async function deleteBoard(boardId: string) {
   await api.delete(`/api/boards/${boardId}`);
 }
 
+export interface RenameBoardPayload {
+  name: string;
+  requesterId: string;
+}
+
+export async function renameBoard(boardId: string, payload: RenameBoardPayload) {
+  const { data } = await api.patch<{ board: Board }>(`/api/boards/${boardId}`, payload);
+  return data.board;
+}
+
 export async function verifyGoogleAuth(payload: GoogleAuthPayload) {
   const { data } = await api.post<{ user: AuthUserResponse; tokens?: GoogleAuthTokens }>(
     '/api/auth/verify',

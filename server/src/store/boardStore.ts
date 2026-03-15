@@ -108,6 +108,18 @@ export class BoardStore {
     return existed;
   }
 
+  async renameBoard(boardId: string, name: string): Promise<Board | undefined> {
+    const board = await this.getBoard(boardId);
+    if (!board) {
+      return undefined;
+    }
+
+    board.name = name;
+    board.updatedAt = new Date().toISOString();
+    await this.persist();
+    return board;
+  }
+
   async createNote(input: CreateStickyNoteInput): Promise<StickyNote> {
     const board = await this.getBoard(input.boardId);
     if (!board) {

@@ -172,6 +172,43 @@ describe('Boards API and socket collaboration', () => {
     await agent.post('/api/boards').send({ name: 'Missing Owner' }).expect(400);
   });
 
+  it('allows only the board creator to rename a board', async () => {
+    const owner = { id: 'rename-owner', name: 'Rename Owner', email: 'rename-owner@example.com' };
+    const otherUser = { id: 'rename-other', name: 'Rename Other', email: 'rename-other@example.com' };
+
+    const createResponse = await agent
+      .post('/api/boards')
+      .send({
+        name: 'Original Name',
+        owner
+      })
+      .expect(201);
+
+    const boardId = createResponse.body.board.id as string;
+
+    await agent
+      .patch(`/api/boards/${boardId}`)
+      .send({
+        name: 'Blocked Rename',
+        requesterId: otherUser.id
+      })
+      .expect(403);
+
+    const renameResponse = await agent
+      .patch(`/api/boards/${boardId}`)
+      .send({
+        name: 'Renamed Board',
+        requesterId: owner.id
+      })
+      .expect(200);
+
+    expect(renameResponse.body.board.name).toBe('Renamed Board');
+    expect(renameResponse.body.board.id).toBe(boardId);
+
+    const persistedBoard = await boardStore.getBoard(boardId);
+    expect(persistedBoard?.name).toBe('Renamed Board');
+  });
+
   it('lists boards for an owner and supports deletion', async () => {
     const owner = { id: 'owner-user', name: 'Owner User', email: 'owner@example.com' };
     const otherOwner = { id: 'another-user', name: 'Another User', email: 'other@example.com' };
