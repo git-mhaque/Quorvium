@@ -16,7 +16,7 @@ API Service (Express + Socket.IO)
   |- Auth verification (Google OAuth2)
   |- Board + note CRUD
   v
-File Store (JSON on local disk or Cloud Run /tmp)
+Storage Adapter (JSON file or Cloud Firestore)
 ```
 
 ## Architecture Diagrams
@@ -45,7 +45,7 @@ Source: [`docs/diagrams/artifact-promotion.mmd`](./diagrams/artifact-promotion.m
 - API container runs on Cloud Run.
 - Client static bundle is deployed to a Cloud Storage bucket and served through an external HTTP(S) load balancer (`staging.quorvium.com`) with managed TLS and HTTP->HTTPS redirect.
 - CI/CD pipeline is defined in `.github/workflows/ci.yml`.
-- Terraform under `infra/` provisions baseline cloud resources and related IAM/secrets plumbing.
+- Terraform under `infra/staging/` provisions baseline staging cloud resources and related IAM/secrets plumbing.
 
 ## Component Architecture
 ### Client (`client/`)
@@ -79,6 +79,14 @@ Source: [`docs/diagrams/artifact-promotion.mmd`](./diagrams/artifact-promotion.m
 - In Cloud Run, `DATA_DIR` is used (workflow currently sets `/tmp/quorvium-data`).
 - Current storage model is single-node file-based and not production durable.
 
+### Persistent Datastore Capability
+- Storage backend is selected by `DATA_STORE`.
+- `DATA_STORE=file` (default): existing JSON-file adapter.
+- `DATA_STORE=firestore`: Cloud Firestore adapter using:
+  - `boards/{boardId}`
+  - `boards/{boardId}/notes/{noteId}`
+- Optional Firestore settings: `FIRESTORE_PROJECT_ID`, `FIRESTORE_DATABASE_ID`, `FIRESTORE_BOARDS_COLLECTION`.
+
 ## Data Model
 Core server types are defined in `server/src/types.ts`:
 - `Participant`: user identity metadata.
@@ -96,10 +104,10 @@ Core server types are defined in `server/src/types.ts`:
 - CI workflow (`.github/workflows/ci.yml`) runs lint, typecheck, tests, and build on PRs and pushes to `main`.
 - On `main`, CI computes `PRODUCT_VERSION` (`YYYY.MM.DD.SEQ.commitsha`, where `SEQ` is the GitHub run number), packages one immutable client release artifact (`client-<version>.tar.gz` + manifest checksum), tags/pushes API images by commit SHA and product version, and deploys that exact client artifact to staging (no client rebuild in deploy stage).
 - Release promotion workflow (`.github/workflows/promote-release-production.yml`) promotes both API image and client artifact by `product_version`, with digest/checksum parity checks when publishing to production.
-- Infra code in `infra/*.tf` defines cloud resources and supporting IAM/secrets.
+- Infra code in `infra/staging/*.tf` defines staging cloud resources and supporting IAM/secrets.
 
 ## Current Constraints
-- Board persistence is file-based and ephemeral on Cloud Run restart/rollout.
-- Horizontal scaling with shared state is not yet supported.
+- File-store mode remains ephemeral on Cloud Run restart/rollout.
+- Full realtime multi-instance consistency still relies on current Socket.IO topology decisions (single process assumptions).
 - OAuth token refresh endpoint is not yet implemented.
 - Board access uses share-link model; fine-grained board authorization is pending.

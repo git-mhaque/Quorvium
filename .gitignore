@@ -32,7 +32,6 @@ tmp/
 server/data/*.json
 
 # Terraform
-infra/terraform.tfvars
-infra/.terraform/
-infra/terraform.tfstate
-infra/terraform.tfstate.*
+infra/**/.terraform/
+infra/**/*.tfstate
+infra/**/*.tfstate.*

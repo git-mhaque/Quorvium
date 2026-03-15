@@ -1,0 +1,11 @@
+project_id                    = "quorvium"
+region                        = "australia-southeast1"
+environment                   = "staging"
+service_name                  = "quorvium-api"
+cloud_run_max_instances       = 5
+cloud_run_cpu                 = "1"
+cloud_run_memory              = "512Mi"
+oauth_client_secret_secret_id = "google-oauth-client-secret-staging"
+enable_firestore_database     = true
+firestore_location            = "australia-southeast1"
+firestore_database_name       = "(default)"

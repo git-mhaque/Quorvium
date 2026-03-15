@@ -22,8 +22,9 @@ variable "service_name" {
 }
 
 variable "cloud_run_image" {
-  description = "Bootstrap container image used when Terraform creates the Cloud Run service for the first time."
+  description = "Bootstrap container image used when Terraform creates the Cloud Run service for the first time. CI/CD deploys replace this image after first apply."
   type        = string
+  default     = "us-docker.pkg.dev/cloudrun/container/hello:latest"
 }
 
 variable "cloud_run_max_instances" {
@@ -50,20 +51,20 @@ variable "oauth_client_secret_secret_id" {
   default     = "google-oauth-client-secret"
 }
 
-variable "google_client_id" {
-  description = "Deprecated: runtime value is now set by the GitHub Actions deploy workflow."
+variable "enable_firestore_database" {
+  description = "Whether Terraform should provision the Firestore database for this environment."
+  type        = bool
+  default     = false
+}
+
+variable "firestore_location" {
+  description = "Firestore database location (region or multi-region identifier)."
   type        = string
   default     = ""
 }
 
-variable "google_redirect_uri" {
-  description = "Deprecated: runtime value is now set by the GitHub Actions deploy workflow."
+variable "firestore_database_name" {
+  description = "Firestore database ID. Use (default) unless multiple-database mode is intentionally required."
   type        = string
-  default     = ""
-}
-
-variable "client_origin" {
-  description = "Deprecated: runtime value is now set by the GitHub Actions deploy workflow."
-  type        = string
-  default     = ""
+  default     = "(default)"
 }

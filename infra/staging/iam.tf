@@ -10,6 +10,12 @@ resource "google_project_iam_member" "cloud_run_metric_writer" {
   member  = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
+resource "google_project_iam_member" "cloud_run_firestore_user" {
+  project = var.project_id
+  role    = "roles/datastore.user"
+  member  = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
 resource "google_cloud_run_v2_service_iam_member" "public_invoker" {
   project  = var.project_id
   location = var.region

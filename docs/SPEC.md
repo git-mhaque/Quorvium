@@ -19,7 +19,7 @@ Implementation details and runtime topology are documented in `ARCHITECTURE.md`.
 ## Board Lifecycle
 - **Creation:** Authenticated users provide a name and receive a shareable `/boards/:id` URL. Owner metadata (id, name, email, avatar) is persisted.
 - **Joining:** Participants can join via full URL or board ID. Access does not require authentication.
-- **Persistence:** Boards and sticky notes are stored in `server/data/boards.json` (developer machines only; swap for durable storage in production).
+- **Persistence:** Storage adapter is selected by `DATA_STORE`. `file` mode stores boards/notes in `server/data/boards.json`; `firestore` mode persists boards in Cloud Firestore (`boards/{boardId}` with `notes` subcollection) for durable multi-instance deployments.
 - **Management:** Signed-in owners see a "My Boards" table listing their boards with created/updated timestamps, direct board links, one-click copy, delete controls, and a quick "Create board" action that captures the board name in-place.
 
 ## Collaboration Canvas

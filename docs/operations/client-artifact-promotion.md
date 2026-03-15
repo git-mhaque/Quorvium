@@ -61,6 +61,10 @@ Promote the exact staged release into production without rebuilding artifacts:
 - `GOOGLE_CLIENT_ID`
 - `GOOGLE_REDIRECT_URI`
 - `GOOGLE_CLIENT_SECRET_SECRET_ID`
+- `DATA_STORE` (optional, defaults to `file`; set `firestore` to enable Firestore adapter)
+- `FIRESTORE_PROJECT_ID` (optional, defaults to `GCP_PROJECT_ID`)
+- `FIRESTORE_DATABASE_ID` (optional, defaults to `(default)`)
+- `FIRESTORE_BOARDS_COLLECTION` (optional, defaults to `boards`)
 - `CLIENT_ORIGIN`
 - `PRODUCTION_BUCKET`
 - `VITE_API_BASE_URL`

@@ -3,6 +3,7 @@ import { promises as fs } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 
+import { env } from '../env.js';
 import {
   Board,
   CreateBoardInput,
@@ -10,6 +11,8 @@ import {
   StickyNote,
   UpdateStickyNoteInput
 } from '../types.js';
+import { FirestoreBoardStore } from './firestoreBoardStore.js';
+import type { PersistentBoardStore } from './store.types.js';
 
 const WORKSPACE_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const DEFAULT_DATA_DIR = resolve(process.env.DATA_DIR ?? join(WORKSPACE_ROOT, 'data'));
@@ -28,7 +31,7 @@ interface SerializedBoard {
   boards: Board[];
 }
 
-export class BoardStore {
+export class BoardStore implements PersistentBoardStore {
   private dataFile: string;
   private boards = new Map<string, Board>();
   private isReady = false;
@@ -177,4 +180,15 @@ export class BoardStore {
   }
 }
 
-export const boardStore = new BoardStore();
+export function createConfiguredBoardStore(): PersistentBoardStore {
+  if (env.dataStore === 'firestore') {
+    return new FirestoreBoardStore({
+      projectId: env.firestoreProjectId,
+      databaseId: env.firestoreDatabaseId,
+      boardsCollection: env.firestoreBoardsCollection
+    });
+  }
+  return new BoardStore();
+}
+
+export const boardStore: PersistentBoardStore = createConfiguredBoardStore();

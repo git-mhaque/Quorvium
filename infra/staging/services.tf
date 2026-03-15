@@ -3,7 +3,8 @@ resource "google_project_service" "required" {
     "run.googleapis.com",
     "artifactregistry.googleapis.com",
     "secretmanager.googleapis.com",
-    "compute.googleapis.com"
+    "compute.googleapis.com",
+    "firestore.googleapis.com"
   ])
 
   service            = each.value

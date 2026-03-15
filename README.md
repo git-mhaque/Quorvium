@@ -23,6 +23,10 @@ Populate environment values before starting the app:
 |                   | `GOOGLE_CLIENT_SECRET`       | `GOCSPX-…`                       |
 |                   | `GOOGLE_REDIRECT_URI`        | `http://localhost:5173/`         |
 |                   | `CLIENT_ORIGIN`              | `http://localhost:5173`          |
+|                   | `DATA_STORE`                 | `file` (default) or `firestore`  |
+|                   | `FIRESTORE_PROJECT_ID`       | `quorvium` (optional in GCP runtime) |
+|                   | `FIRESTORE_DATABASE_ID`      | `(default)` (optional)           |
+|                   | `FIRESTORE_BOARDS_COLLECTION`| `boards`                         |
 | `client/.env`     | `VITE_API_BASE_URL`          | `http://localhost:4000`          |
 |                   | `VITE_BASE_PATH`             | `./` (Cloud Storage/static hosting default) |
 |                   | `VITE_ROUTER_MODE`           | `browser` (use `hash` for static hosting without rewrites) |
@@ -31,6 +35,8 @@ Populate environment values before starting the app:
 |                   | `VITE_GOOGLE_REDIRECT_URI`   | `http://localhost:5173/`         |
 
 For deployed environments, frontend runtime values are injected via `runtime-config.js` at deploy time. This allows staging and production to use the same built frontend artifact.
+
+Backend persistence defaults to local file storage (`DATA_STORE=file`). Set `DATA_STORE=firestore` to use Cloud Firestore (`boards/{boardId}` and `boards/{boardId}/notes/{noteId}`) for durable multi-instance persistence.
 
 Only Google-authenticated users can create boards. Visitors may still join existing boards without signing in, but they collaborate anonymously. Signed-in owners can manage boards from the home page via a "My Boards" table (name, created, updated, quick create, join link, copy, delete).
 

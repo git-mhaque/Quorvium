@@ -31,6 +31,8 @@ Script behavior:
 
 - Creates a new service account key for `github-deployer-staging@quorvium.iam.gserviceaccount.com` and sets staging environment secret `GCP_SA_KEY`.
 - Sets staging environment secret `ARTIFACT_REGISTRY_REPO=australia-southeast1-docker.pkg.dev/quorvium/quorvium-staging-repo/quorvium-api`.
+- Enables Firestore datastore mode for staging by default: `DATA_STORE=firestore`.
+- Sets Firestore secrets for staging runtime: `FIRESTORE_PROJECT_ID=quorvium`, `FIRESTORE_DATABASE_ID=(default)`, `FIRESTORE_BOARDS_COLLECTION=boards`.
 - Sets all required `staging` environment secrets for the current custom-domain deployment.
 - Normalizes `STAGING_BUCKET` to `gs://...` because CI requires that prefix.
 - Sets `VITE_ROUTER_MODE=browser` (the CI/workflow key name is `VITE_ROUTER_MODE`).
@@ -48,6 +50,10 @@ Script behavior:
 | `GOOGLE_CLIENT_SECRET_SECRET_ID` | Secret Manager secret ID containing OAuth client secret. | Secret Manager | Example: `google-oauth-client-secret-staging`; deploy job binds `GOOGLE_CLIENT_SECRET` from `latest`. |
 | `GOOGLE_REDIRECT_URI` | OAuth redirect URI for the staging client. | Application config | e.g., `https://staging.quorvium.com`. |
 | `CLIENT_ORIGIN` | Frontend origin allowed by CORS. | Vite deployment config | e.g., `https://staging.quorvium.com`. |
+| `DATA_STORE` | Backend persistence adapter selector. | Application config | Staging default is `firestore` (bootstrap script sets this). |
+| `FIRESTORE_PROJECT_ID` | Firestore project for backend persistence when `DATA_STORE=firestore`. | GCP project config | Staging default is `quorvium` (bootstrap script sets this). |
+| `FIRESTORE_DATABASE_ID` | Firestore database ID. | Firestore config | Staging default is `(default)` (bootstrap script sets this). |
+| `FIRESTORE_BOARDS_COLLECTION` | Root collection name for board docs. | Application config | Staging default is `boards` (bootstrap script sets this). |
 | `VITE_API_BASE_URL` | API base URL written into `runtime-config.js` during deploy. | Cloud Run URL | Example: `https://quorvium-api-staging-a4nw.run.app`. |
 | `VITE_GOOGLE_CLIENT_ID` | Client-side OAuth ID. | Same as `GOOGLE_CLIENT_ID` unless split. | Optional if staging UI uses the same OAuth app. |
 | `VITE_GOOGLE_REDIRECT_URI` | Client redirect URL written into `runtime-config.js`. | Frontend runtime config | Typically matches `GOOGLE_REDIRECT_URI`. |
@@ -76,6 +82,10 @@ GitHub `staging` environment values that worked together:
 - `GOOGLE_REDIRECT_URI=https://staging.quorvium.com`
 - `VITE_GOOGLE_REDIRECT_URI=https://staging.quorvium.com`
 - `VITE_API_BASE_URL=https://quorvium-api-staging-bnr4ohmdsa-ts.a.run.app`
+- `DATA_STORE=firestore`
+- `FIRESTORE_PROJECT_ID=quorvium`
+- `FIRESTORE_DATABASE_ID=(default)`
+- `FIRESTORE_BOARDS_COLLECTION=boards`
 - `VITE_BASE_PATH=/`
 - `VITE_ROUTER_MODE=browser`
 - `STAGING_BUCKET=gs://staging.quorvium.com`

@@ -37,8 +37,11 @@
 |       `-- ci.yml
 `-- infra/
     |-- README.md
-    |-- *.tf
-    `-- terraform.tfvars.example
+    `-- staging/
+        |-- *.tf
+        |-- terraform.tfvars
+        |-- terraform.tfvars.example
+        `-- README.md
 ```
 
 ## Setup and Core Commands
@@ -69,10 +72,10 @@
 - Keep CI steps aligned with root scripts (`lint`, `typecheck`, `test`, `build`) unless intentionally changing CI policy.
 
 ## Infrastructure (`infra/`)
-- Terraform configuration for Cloud Run, IAM, services, outputs, and secret wiring lives in `infra/`.
-- Read `infra/README.md` before changing Terraform resources or deploy assumptions.
+- Terraform configuration for staging Cloud Run, IAM, services, outputs, and secret wiring lives in `infra/staging/`.
+- Read `infra/README.md` and `infra/staging/README.md` before changing Terraform resources or deploy assumptions.
 - Do not hardcode secrets in `.tf` files; use Secret Manager references and documented secret inputs.
-- Use `terraform.tfvars.example` as the template; keep `terraform.tfvars` environment-specific.
+- Use `infra/staging/terraform.tfvars.example` as the template. `infra/staging/terraform.tfvars` is intentionally versioned for non-secret environment defaults.
 - Never edit Terraform state files manually; treat state as tooling-managed data.
 - If infra changes impact deploy/runtime behavior, update `docs/operations/` and relevant workflow config together.
 

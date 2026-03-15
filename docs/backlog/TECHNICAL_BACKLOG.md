@@ -56,7 +56,7 @@ Use this file for reliability, performance, security, developer experience, and 
 ### TECH-008 Scope
 - Restructure Terraform into clear environment entrypoints and shared modules (for example `infra/environments/<env>` + `infra/modules`).
 - Configure remote state backend and locking for team-safe plans/applies.
-- Remove local `.tfstate` and non-example `.tfvars` from version control; keep only safe templates (for example `terraform.tfvars.example`).
+- Remove local `.tfstate` from version control and keep any committed `.tfvars` sanitized (non-secret) and environment-scoped.
 - Add reproducible init/plan/apply instructions per environment and align infra docs with the new layout.
 - Add Terraform validation checks (`fmt`/`validate`) for infra changes in CI.
 

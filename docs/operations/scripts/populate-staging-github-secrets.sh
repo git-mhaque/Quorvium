@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Populate GitHub secrets for Quorvium staging (custom domain hosting).
-# - Environment secrets (staging): GCP_SA_KEY, ARTIFACT_REGISTRY_REPO, CLIENT_ORIGIN, CLOUD_RUN_SERVICE, ...
+# Populate GitHub secrets for Quorvium staging (custom domain hosting + Firestore datastore).
+# - Environment secrets (staging): GCP_SA_KEY, ARTIFACT_REGISTRY_REPO, CLIENT_ORIGIN, CLOUD_RUN_SERVICE, DATA_STORE, FIRESTORE_*, ...
 #
 # Usage:
 #   bash docs/operations/scripts/populate-staging-github-secrets.sh
@@ -24,6 +24,10 @@ CLOUD_RUN_SERVICE_VALUE="${CLOUD_RUN_SERVICE_VALUE:-quorvium-api-staging}"
 GOOGLE_CLIENT_ID_VALUE="${GOOGLE_CLIENT_ID_VALUE:-588904878485-u39c10ovvhg1imuam4f0jdt979ka4rlh.apps.googleusercontent.com}"
 GOOGLE_CLIENT_SECRET_SECRET_ID_VALUE="${GOOGLE_CLIENT_SECRET_SECRET_ID_VALUE:-google-oauth-client-secret-staging}"
 GOOGLE_REDIRECT_URI_VALUE="${GOOGLE_REDIRECT_URI_VALUE:-https://staging.quorvium.com}"
+DATA_STORE_VALUE="${DATA_STORE_VALUE:-firestore}"
+FIRESTORE_PROJECT_ID_VALUE="${FIRESTORE_PROJECT_ID_VALUE:-${PROJECT_ID}}"
+FIRESTORE_DATABASE_ID_VALUE="${FIRESTORE_DATABASE_ID_VALUE:-(default)}"
+FIRESTORE_BOARDS_COLLECTION_VALUE="${FIRESTORE_BOARDS_COLLECTION_VALUE:-boards}"
 STAGING_BUCKET_VALUE="${STAGING_BUCKET_VALUE:-staging.quorvium.com}"
 VITE_API_BASE_URL_VALUE="${VITE_API_BASE_URL_VALUE:-https://quorvium-api-staging-bnr4ohmdsa-ts.a.run.app}"
 VITE_BASE_PATH_VALUE="${VITE_BASE_PATH_VALUE:-/}"
@@ -144,6 +148,10 @@ set_env_secret "GCP_REGION" "${REGION}"
 set_env_secret "GOOGLE_CLIENT_ID" "${GOOGLE_CLIENT_ID_VALUE}"
 set_env_secret "GOOGLE_CLIENT_SECRET_SECRET_ID" "${GOOGLE_CLIENT_SECRET_SECRET_ID_VALUE}"
 set_env_secret "GOOGLE_REDIRECT_URI" "${GOOGLE_REDIRECT_URI_VALUE}"
+set_env_secret "DATA_STORE" "${DATA_STORE_VALUE}"
+set_env_secret "FIRESTORE_PROJECT_ID" "${FIRESTORE_PROJECT_ID_VALUE}"
+set_env_secret "FIRESTORE_DATABASE_ID" "${FIRESTORE_DATABASE_ID_VALUE}"
+set_env_secret "FIRESTORE_BOARDS_COLLECTION" "${FIRESTORE_BOARDS_COLLECTION_VALUE}"
 set_env_secret "STAGING_BUCKET" "${STAGING_BUCKET_VALUE}"
 set_env_secret "VITE_API_BASE_URL" "${VITE_API_BASE_URL_VALUE}"
 set_env_secret "VITE_BASE_PATH" "${VITE_BASE_PATH_VALUE}"
@@ -154,5 +162,7 @@ set_env_secret "VITE_ROUTER_MODE" "${VITE_ROUTER_MODE_VALUE}"
 echo "Done."
 echo "Notes:"
 echo "- STAGING_BUCKET was set to ${STAGING_BUCKET_VALUE}"
+echo "- DATA_STORE was set to ${DATA_STORE_VALUE}"
+echo "- FIRESTORE_PROJECT_ID=${FIRESTORE_PROJECT_ID_VALUE}, FIRESTORE_DATABASE_ID=${FIRESTORE_DATABASE_ID_VALUE}, FIRESTORE_BOARDS_COLLECTION=${FIRESTORE_BOARDS_COLLECTION_VALUE}"
 echo "- A new service account key was created for ${DEPLOYER_SERVICE_ACCOUNT_EMAIL} and uploaded to ${ENV_NAME} secret GCP_SA_KEY."
 echo "- Rotate and prune old keys periodically: gcloud iam service-accounts keys list --iam-account=${DEPLOYER_SERVICE_ACCOUNT_EMAIL} --project=${PROJECT_ID}"
