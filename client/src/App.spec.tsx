@@ -32,4 +32,16 @@ describe('App', () => {
       screen.getByText(/Use your Google account to create new boards/i)
     ).toBeInTheDocument();
   });
+
+  it('renders the app build version in the footer', () => {
+    render(
+      <BrowserRouter>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </BrowserRouter>
+    );
+
+    expect(screen.getByLabelText(/application version/i)).toHaveTextContent(/version/i);
+  });
 });

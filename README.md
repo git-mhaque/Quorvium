@@ -26,6 +26,7 @@ Populate environment values before starting the app:
 | `client/.env`     | `VITE_API_BASE_URL`          | `http://localhost:4000`          |
 |                   | `VITE_BASE_PATH`             | `./` (Cloud Storage/static hosting default) |
 |                   | `VITE_ROUTER_MODE`           | `browser` (use `hash` for static hosting without rewrites) |
+|                   | `VITE_APP_VERSION`           | `dev.local` (CI sets `YYYY.MM.DD.SEQ.commitsha`, with `SEQ=run_number`) |
 |                   | `VITE_GOOGLE_CLIENT_ID`      | same as server                   |
 |                   | `VITE_GOOGLE_REDIRECT_URI`   | `http://localhost:5173/`         |
 

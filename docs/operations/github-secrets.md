@@ -55,6 +55,8 @@ Script behavior:
 | `VITE_ROUTER_MODE` | Client routing strategy. | Frontend runtime config | Use `browser` for the custom-domain setup behind HTTPS LB. |
 | `STAGING_BUCKET` | Google Cloud Storage bucket URI for static client hosting. | Cloud Storage (`gs://...`) | Example: `gs://staging.quorvium.com`. |
 
+`VITE_APP_VERSION` is intentionally not stored as a GitHub secret. CI computes it on each build as `YYYY.MM.DD.SEQ.commitsha` (`SEQ` = GitHub run number) and injects it at client build time.
+
 ### Identity Split (Staging)
 
 - Runtime identity: `quorvium-api-staging@quorvium.iam.gserviceaccount.com` (Cloud Run runtime only).

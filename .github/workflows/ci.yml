@@ -9,9 +9,23 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      product_version: ${{ steps.version.outputs.product_version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Compute product version
+        id: version
+        env:
+          BUILD_SHA: ${{ github.sha }}
+          BUILD_RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          SHORT_SHA="$(printf '%s' "${BUILD_SHA}" | cut -c1-7)"
+          DATE_UTC="$(date -u '+%Y.%m.%d')"
+          PRODUCT_VERSION="${DATE_UTC}.${BUILD_RUN_NUMBER}.${SHORT_SHA}"
+          echo "product_version=${PRODUCT_VERSION}" >> "$GITHUB_OUTPUT"
+          printf 'Computed product version: %s\n' "${PRODUCT_VERSION}"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -43,11 +57,14 @@ jobs:
     outputs:
       image_uri: ${{ steps.push.outputs.image_uri }}
       image_digest: ${{ steps.push.outputs.image_digest }}
+      image_uri_version: ${{ steps.push.outputs.image_uri_version }}
+      product_version: ${{ needs.build.outputs.product_version }}
     permissions:
       contents: read
     env:
       IMAGE_REPO: ${{ secrets.ARTIFACT_REGISTRY_REPO }}
       IMAGE_TAG: ${{ github.sha }}
+      PRODUCT_VERSION: ${{ needs.build.outputs.product_version }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -71,33 +88,44 @@ jobs:
       - name: Build container image
         env:
           IMAGE_URI: ${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}
+          IMAGE_URI_VERSION: ${{ env.IMAGE_REPO }}:${{ env.PRODUCT_VERSION }}
         run: |
           docker build \
             --file Dockerfile \
             --tag "${IMAGE_URI}" \
+            --tag "${IMAGE_URI_VERSION}" \
+            --label "org.opencontainers.image.version=${PRODUCT_VERSION}" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
             .
 
       - name: Push container image
         id: push
         env:
           IMAGE_URI: ${{ env.IMAGE_REPO }}:${{ env.IMAGE_TAG }}
+          IMAGE_URI_VERSION: ${{ env.IMAGE_REPO }}:${{ env.PRODUCT_VERSION }}
         run: |
           docker push "${IMAGE_URI}"
+          docker push "${IMAGE_URI_VERSION}"
           DIGEST="$(docker image inspect "${IMAGE_URI}" --format '{{index .RepoDigests 0}}')"
           echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+          echo "image_uri_version=${IMAGE_URI_VERSION}" >> "$GITHUB_OUTPUT"
           echo "image_digest=${DIGEST}" >> "$GITHUB_OUTPUT"
 
       - name: Emit image details
         env:
           IMAGE_URI: ${{ steps.push.outputs.image_uri }}
+          IMAGE_URI_VERSION: ${{ steps.push.outputs.image_uri_version }}
           IMAGE_DIGEST: ${{ steps.push.outputs.image_digest }}
+          PRODUCT_VERSION: ${{ env.PRODUCT_VERSION }}
         run: |
-          printf 'Image pushed: %s\nDigest: %s\n' "${IMAGE_URI}" "${IMAGE_DIGEST}"
+          printf 'Image pushed (SHA): %s\nImage pushed (version): %s\nProduct version: %s\nDigest: %s\n' "${IMAGE_URI}" "${IMAGE_URI_VERSION}" "${PRODUCT_VERSION}" "${IMAGE_DIGEST}"
 
   deploy-api-staging:
     name: Deploy API (staging)
     runs-on: ubuntu-latest
-    needs: docker-publish
+    needs:
+      - build
+      - docker-publish
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
@@ -111,6 +139,7 @@ jobs:
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_REDIRECT_URI: ${{ secrets.GOOGLE_REDIRECT_URI }}
       GOOGLE_CLIENT_SECRET_SECRET_ID: ${{ secrets.GOOGLE_CLIENT_SECRET_SECRET_ID }}
+      PRODUCT_VERSION: ${{ needs.build.outputs.product_version }}
     steps:
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -122,7 +151,7 @@ jobs:
 
       - name: Validate deploy inputs
         run: |
-          for key in GCP_PROJECT_ID GCP_REGION CLOUD_RUN_SERVICE ARTIFACT_REGISTRY_REPO CLIENT_ORIGIN GOOGLE_CLIENT_ID GOOGLE_REDIRECT_URI GOOGLE_CLIENT_SECRET_SECRET_ID; do
+          for key in GCP_PROJECT_ID GCP_REGION CLOUD_RUN_SERVICE ARTIFACT_REGISTRY_REPO CLIENT_ORIGIN GOOGLE_CLIENT_ID GOOGLE_REDIRECT_URI GOOGLE_CLIENT_SECRET_SECRET_ID PRODUCT_VERSION; do
             if [ -z "${!key}" ]; then
               echo "${key} secret/output is required" >&2
               exit 1
@@ -137,7 +166,7 @@ jobs:
             --region="${GCP_REGION}" \
             --platform=managed \
             --image="${IMAGE_URI}" \
-            --set-env-vars="NODE_ENV=production,DATA_DIR=/tmp/quorvium-data,CLIENT_ORIGIN=${CLIENT_ORIGIN},GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID},GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}" \
+            --set-env-vars="NODE_ENV=production,DATA_DIR=/tmp/quorvium-data,CLIENT_ORIGIN=${CLIENT_ORIGIN},GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID},GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI},PRODUCT_VERSION=${PRODUCT_VERSION}" \
             --set-secrets="GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET_SECRET_ID}:latest" \
             --quiet
 
@@ -151,6 +180,7 @@ jobs:
     environment: staging
     env:
       VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+      VITE_APP_VERSION: ${{ needs.build.outputs.product_version }}
       VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
       VITE_GOOGLE_REDIRECT_URI: ${{ secrets.VITE_GOOGLE_REDIRECT_URI }}
       VITE_BASE_PATH: ${{ secrets.VITE_BASE_PATH }}

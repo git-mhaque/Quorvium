@@ -35,6 +35,7 @@ File Store (JSON on local disk or Cloud Run /tmp)
 - Authentication state in `src/state/auth.tsx` stores active user in `localStorage` (`quorvium:user`).
 - Guests are generated client-side; Google auth is verified by the API.
 - API client: `src/lib/api.ts` (Axios, base URL from `VITE_API_BASE_URL` build-time define).
+- Product version: build-time define from `VITE_APP_VERSION`, rendered in the footer so each deployed build is identifiable.
 - Realtime client: `src/lib/socket.ts` uses websocket transport and joins board rooms.
 
 ### API Server (`server/`)
@@ -73,7 +74,7 @@ Core server types are defined in `server/src/types.ts`:
 
 ## Delivery and Operations
 - CI workflow (`.github/workflows/ci.yml`) runs lint, typecheck, tests, and build on PRs and pushes to `main`.
-- On `main`, CI also builds/pushes the API image, deploys API to Cloud Run, and deploys client assets to the staging bucket with cache-aware upload ordering.
+- On `main`, CI also computes `PRODUCT_VERSION` (`YYYY.MM.DD.SEQ.commitsha`, where `SEQ` is the GitHub run number), tags/pushes API images by commit SHA and product version, deploys API to Cloud Run, and deploys client assets to the staging bucket with cache-aware upload ordering.
 - Infra code in `infra/*.tf` defines cloud resources and supporting IAM/secrets.
 
 ## Current Constraints

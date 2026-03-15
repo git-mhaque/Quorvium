@@ -4,6 +4,12 @@
 Quorvium is a collaborative whiteboard for distributed teams to capture and organize ideas in real time. The application consists of a React/Vite client and an Express + Socket.IO backend, with TypeScript across the stack.
 Implementation details and runtime topology are documented in `ARCHITECTURE.md`.
 
+## Product Versioning
+- Every CI build generates a product version string in the format `YYYY.MM.DD.SEQ.commitsha`.
+- `SEQ` is sourced from the GitHub Actions run number for that build.
+- The version is injected into the client build and displayed in the in-app footer for operator/user visibility.
+- The same version is attached to released container images to support staging-to-production promotion by version.
+
 ## Authentication & Access
 - **Google Sign-In (OAuth 2.0):** Product behavior requires Google-authenticated users to create boards. The current UX enforces this at the client layer.
 - **Shared Access Links:** Visitors without Google accounts can open a board URL shared by teammates and collaborate anonymously.
@@ -22,7 +28,7 @@ Implementation details and runtime topology are documented in `ARCHITECTURE.md`.
 ## Security & Tokens
 - OAuth refresh and access tokens are written to `quorvium_google_refresh` and `quorvium_google_access` cookies (secure, HTTP-only, `SameSite=Lax`) when Google returns those tokens via authorization-code exchange.
 - Add a token-refresh endpoint before calling downstream Google APIs from authenticated server workflows.
-- Environment variables: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `CLIENT_ORIGIN`, `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_REDIRECT_URI`, `VITE_API_BASE_URL`.
+- Environment variables: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `CLIENT_ORIGIN`, `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_REDIRECT_URI`, `VITE_API_BASE_URL`, `VITE_APP_VERSION`.
 
 ## Testing & Tooling
 - Root quality commands: `npm run lint`, `npm run typecheck`, `npm test --cache=/tmp/npm-cache`, `npm run build`.
