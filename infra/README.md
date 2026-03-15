@@ -16,15 +16,28 @@ This directory contains Terraform configuration that provisions the minimal prod
      --location=australia-southeast1
    ```
    Use separate repositories per environment (for example `quorvium-staging-repo` and `quorvium-prod-repo`), and create each repository once.
-   Grant the GitHub deployer service account `roles/artifactregistry.writer`.
-   Grant the deployer account permission to act as the Cloud Run runtime service account:
+   Establish split identities for staging deployment:
    ```sh
-   DEPLOYER_SA="quorvium-api-staging@quorvium.iam.gserviceaccount.com"
-   RUNTIME_SA="quorvium-api-staging@quorvium.iam.gserviceaccount.com"
+   PROJECT_ID="quorvium"
+   DEPLOYER_SA="github-deployer-staging@${PROJECT_ID}.iam.gserviceaccount.com"
+   RUNTIME_SA="quorvium-api-staging@${PROJECT_ID}.iam.gserviceaccount.com"
+
+   if ! gcloud iam service-accounts describe "${DEPLOYER_SA}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
+     gcloud iam service-accounts create github-deployer-staging \
+       --project="${PROJECT_ID}" \
+       --display-name="GitHub Deployer (staging)"
+   fi
+
+   for role in roles/run.admin roles/artifactregistry.writer roles/secretmanager.secretAccessor; do
+     gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+       --member="serviceAccount:${DEPLOYER_SA}" \
+       --role="${role}"
+   done
 
    gcloud iam service-accounts add-iam-policy-binding "$RUNTIME_SA" \
-   --member="serviceAccount:$DEPLOYER_SA" \
-   --role="roles/iam.serviceAccountUser"
+     --project="${PROJECT_ID}" \
+     --member="serviceAccount:${DEPLOYER_SA}" \
+     --role="roles/iam.serviceAccountUser"
    ```
 3. Copy `terraform.tfvars.example` to `terraform.tfvars` and fill in project specific values. `cloud_run_image` is only a bootstrap image used when Terraform creates the service for the first time.
 4. Publish the Google OAuth client secret material so Cloud Run can resolve it at runtime:
@@ -35,22 +48,23 @@ This directory contains Terraform configuration that provisions the minimal prod
    ```
 5. Create the Cloud Storage bucket that hosts the staging web client and enable static-site mode:
    ```sh
-   gsutil mb -p quorvium -l australia-southeast1 gs://staging-quorvium-client
-   gsutil web set -m index.html -e 404.html gs://staging-quorvium-client
+   gsutil mb -p quorvium -l australia-southeast1 gs://staging.quorvium.com
+   gsutil web set -m index.html -e 404.html gs://staging.quorvium.com
    ```
-   Grant the GitHub deployer service account write access to the bucket (for example):
+   Grant the GitHub deployer service account write access to the bucket:
    ```sh
    gsutil iam ch \
-     serviceAccount:YOUR_DEPLOYER_SA@quorvium.iam.gserviceaccount.com:objectAdmin \
-     gs://staging-quorvium-client
+     serviceAccount:github-deployer-staging@quorvium.iam.gserviceaccount.com:objectAdmin \
+     gs://staging.quorvium.com
    ```
    Make the bucket’s objects publicly readable for staging testing:
    ```sh
-   gsutil uniformbucketlevelaccess set on gs://staging-quorvium-client
-   gsutil iam ch allUsers:objectViewer gs://staging-quorvium-client
+   gsutil uniformbucketlevelaccess set on gs://staging.quorvium.com
+   gsutil iam ch allUsers:objectViewer gs://staging.quorvium.com
    ```
-   Upload the `client/dist` build with `gsutil -m rsync -r client/dist gs://staging-quorvium-client`. The CI workflow expects GitHub environment secrets named `STAGING_BUCKET` (`gs://staging-quorvium-client`) and `VITE_BASE_PATH` (use `./` for Cloud Storage hosting) so Vite emits the correct asset URLs.
+   Upload the `client/dist` build with `gsutil -m rsync -r client/dist gs://staging.quorvium.com`. The CI workflow expects GitHub environment secrets named `STAGING_BUCKET` (`gs://staging.quorvium.com`) and `VITE_BASE_PATH` (use `/` for domain-root hosting) so Vite emits the correct asset URLs.
 6. In the GitHub `staging` environment, configure deploy settings used by `.github/workflows/ci.yml`: `GCP_SA_KEY`, `ARTIFACT_REGISTRY_REPO`, `GCP_PROJECT_ID`, `GCP_REGION`, `CLOUD_RUN_SERVICE`, `CLIENT_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI`, and `GOOGLE_CLIENT_SECRET_SECRET_ID`.
+   Set `GCP_SA_KEY` to a key created from `github-deployer-staging@quorvium.iam.gserviceaccount.com` (not the runtime SA).
 7. Initialize the workspace:
    ```sh
    terraform init
@@ -84,6 +98,7 @@ This directory contains Terraform configuration that provisions the minimal prod
 - The Google OAuth client secret resource only ensures the secret exists. Publish at least one secret version (see step 4 above) before applying Terraform; otherwise Cloud Run fails with `secret ... versions/latest was not found`.
 - Terraform ignores Cloud Run container image drift (`template[0].containers[0].image`) so workflow-driven deploys are not reverted on later `terraform apply` runs.
 - Terraform no longer manages Cloud Run runtime environment variables or secret bindings; those are set in the deploy workflow.
+- Keep runtime/deployer identities separate: runtime SA should hold only runtime permissions, while GitHub deploy credentials should use `github-deployer-staging`.
 - Prefer `/api/boards?ownerId=smoke-test` for a basic health check. `/healthz` can return a platform-level 404 on Cloud Run even when the service is healthy.
 - `DATA_DIR` defaults to `/tmp/quorvium-data` on Cloud Run, which is ephemeral. Data resets whenever revisions roll or instances restart—acceptable for light testing but not production.
 - Remote state (GCS bucket + locking) is not yet configured; add this before running in a shared environment.
@@ -95,4 +110,4 @@ This directory contains Terraform configuration that provisions the minimal prod
     --location=australia-southeast1
   ```
   Ensure the GitHub deployer service account has `roles/artifactregistry.writer` on the project or repository.
-- Static hosting for the client is managed manually via Cloud Storage. Use `gsutil rsync` after each Vite build (or CI deploy job) to keep `gs://staging-quorvium-client` in sync.
+- Static hosting for the client is managed manually via Cloud Storage. Use `gsutil rsync` after each Vite build (or CI deploy job) to keep `gs://staging.quorvium.com` in sync.

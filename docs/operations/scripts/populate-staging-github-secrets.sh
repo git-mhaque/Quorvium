@@ -15,7 +15,7 @@ DRY_RUN="false"
 
 PROJECT_ID="${PROJECT_ID:-quorvium}"
 REGION="${REGION:-australia-southeast1}"
-SERVICE_ACCOUNT_EMAIL="${SERVICE_ACCOUNT_EMAIL:-quorvium-api-staging@quorvium.iam.gserviceaccount.com}"
+DEPLOYER_SERVICE_ACCOUNT_EMAIL="${DEPLOYER_SERVICE_ACCOUNT_EMAIL:-github-deployer-staging@quorvium.iam.gserviceaccount.com}"
 
 ARTIFACT_REGISTRY_REPO_VALUE="${ARTIFACT_REGISTRY_REPO_VALUE:-australia-southeast1-docker.pkg.dev/quorvium/quorvium-staging-repo/quorvium-api}"
 
@@ -127,10 +127,10 @@ cleanup() {
 trap cleanup EXIT
 
 if [[ "${DRY_RUN}" == "true" ]]; then
-  echo "[dry-run] gcloud iam service-accounts keys create ${tmp_key} --iam-account=${SERVICE_ACCOUNT_EMAIL} --project=${PROJECT_ID}"
+  echo "[dry-run] gcloud iam service-accounts keys create ${tmp_key} --iam-account=${DEPLOYER_SERVICE_ACCOUNT_EMAIL} --project=${PROJECT_ID}"
 else
   gcloud iam service-accounts keys create "${tmp_key}" \
-    --iam-account="${SERVICE_ACCOUNT_EMAIL}" \
+    --iam-account="${DEPLOYER_SERVICE_ACCOUNT_EMAIL}" \
     --project="${PROJECT_ID}" >/dev/null
 fi
 
@@ -154,5 +154,5 @@ set_env_secret "VITE_ROUTER_MODE" "${VITE_ROUTER_MODE_VALUE}"
 echo "Done."
 echo "Notes:"
 echo "- STAGING_BUCKET was set to ${STAGING_BUCKET_VALUE}"
-echo "- A new service account key was created for ${SERVICE_ACCOUNT_EMAIL} and uploaded to ${ENV_NAME} secret GCP_SA_KEY."
-echo "- Rotate and prune old keys periodically: gcloud iam service-accounts keys list --iam-account=${SERVICE_ACCOUNT_EMAIL} --project=${PROJECT_ID}"
+echo "- A new service account key was created for ${DEPLOYER_SERVICE_ACCOUNT_EMAIL} and uploaded to ${ENV_NAME} secret GCP_SA_KEY."
+echo "- Rotate and prune old keys periodically: gcloud iam service-accounts keys list --iam-account=${DEPLOYER_SERVICE_ACCOUNT_EMAIL} --project=${PROJECT_ID}"

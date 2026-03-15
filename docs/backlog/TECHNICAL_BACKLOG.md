@@ -12,6 +12,7 @@ Use this file for reliability, performance, security, developer experience, and 
 | TECH-002 | Frontend true-promotion pipeline (single artifact + runtime config) | Rebuilding client per environment can produce drift; staging-tested bits are not guaranteed identical to prod bits. | p1 | client/infra/ops | proposed | unassigned | [#2](https://github.com/git-mhaque/Quorvium/issues/2) |
 | TECH-003 | Production environment and infrastructure setup | Production environment resources/identities are not yet separated and provisioned. | p0 | infra/ops | proposed | unassigned | [#3](https://github.com/git-mhaque/Quorvium/issues/3) |
 | TECH-004 | Promotion and deployment flow to production | No formal gated production promotion path with smoke/rollback controls. | p0 | infra/ops/release | proposed | unassigned | [#4](https://github.com/git-mhaque/Quorvium/issues/4) |
+| TECH-005 | Split staging deployer and runtime service accounts | Staging runtime and CI previously shared one identity, increasing blast radius and violating least privilege. | p0 | infra/security/ops | done | unassigned | [#5](https://github.com/git-mhaque/Quorvium/issues/5) |
 
 ## Item Notes
 
@@ -31,6 +32,12 @@ Use this file for reliability, performance, security, developer experience, and 
 - Implement production deployment workflow with approval gates.
 - Define release verification and rollback process.
 - Document artifact promotion policy (digest/tag/rebuild rules).
+
+### TECH-005 Scope
+- Use separate staging identities for deployment (`github-deployer-staging`) and Cloud Run runtime (`quorvium-api-staging`).
+- Move GitHub `staging` `GCP_SA_KEY` to deployer SA key material.
+- Remove deploy-only project roles from runtime SA and revoke its user-managed keys.
+- Keep deployer access scoped to deploy needs, including `roles/iam.serviceAccountUser` on the runtime SA and staging bucket object write access.
 
 ## Intake Template
 

@@ -29,7 +29,7 @@ bash docs/operations/scripts/populate-staging-github-secrets.sh --dry-run
 
 Script behavior:
 
-- Creates a new service account key for `quorvium-api-staging@quorvium.iam.gserviceaccount.com` and sets staging environment secret `GCP_SA_KEY`.
+- Creates a new service account key for `github-deployer-staging@quorvium.iam.gserviceaccount.com` and sets staging environment secret `GCP_SA_KEY`.
 - Sets staging environment secret `ARTIFACT_REGISTRY_REPO=australia-southeast1-docker.pkg.dev/quorvium/quorvium-staging-repo/quorvium-api`.
 - Sets all required `staging` environment secrets for the current custom-domain deployment.
 - Normalizes `STAGING_BUCKET` to `gs://...` because CI requires that prefix.
@@ -41,7 +41,7 @@ Script behavior:
 | --- | --- | --- | --- |
 | `GCP_PROJECT_ID` | Sandbox project ID hosting staging resources. | Terraform remote state / infra repo | Example: `quorvium` |
 | `GCP_REGION` | Region for Cloud Run resources. | Terraform variables | Must match deployment region (`australia-southeast1`). |
-| `GCP_SA_KEY` | JSON key for the deployer service account with deploy + Secret Manager access. | Google Cloud IAM | Grant `roles/run.admin` and `roles/secretmanager.secretAccessor`. |
+| `GCP_SA_KEY` | JSON key for the staging deployer service account. | Google Cloud IAM | Use `github-deployer-staging@quorvium.iam.gserviceaccount.com`; grant `roles/run.admin`, `roles/artifactregistry.writer`, `roles/secretmanager.secretAccessor`, and bucket `roles/storage.objectAdmin`. |
 | `CLOUD_RUN_SERVICE` | Target Cloud Run service name. | Terraform output `cloud_run_service_name` | e.g., `quorvium-api-staging`. |
 | `ARTIFACT_REGISTRY_REPO` | Repository path for container images. | Artifact Registry | Format: `australia-southeast1-docker.pkg.dev/quorvium/quorvium-staging-repo/quorvium-api`. |
 | `GOOGLE_CLIENT_ID` | OAuth client ID used by the API. | Google OAuth credentials | Used by the API deploy job (`gcloud run deploy --set-env-vars`). |
@@ -54,6 +54,13 @@ Script behavior:
 | `VITE_BASE_PATH` | Base path for Vite asset URLs. | Vite config | Use `/` for domain root hosting (`staging.quorvium.com`). |
 | `VITE_ROUTER_MODE` | Client routing strategy. | Frontend runtime config | Use `browser` for the custom-domain setup behind HTTPS LB. |
 | `STAGING_BUCKET` | Google Cloud Storage bucket URI for static client hosting. | Cloud Storage (`gs://...`) | Example: `gs://staging.quorvium.com`. |
+
+### Identity Split (Staging)
+
+- Runtime identity: `quorvium-api-staging@quorvium.iam.gserviceaccount.com` (Cloud Run runtime only).
+- Deployer identity: `github-deployer-staging@quorvium.iam.gserviceaccount.com` (GitHub Actions only).
+- Grant `roles/iam.serviceAccountUser` on the runtime SA to the deployer SA so CI can deploy revisions without sharing runtime credentials.
+- Keep user-managed keys disabled for the runtime SA; only the deployer SA should have the GitHub `GCP_SA_KEY`.
 
 ### Known-Good Staging OAuth Config (March 11, 2026)
 
