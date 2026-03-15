@@ -34,8 +34,9 @@ File Store (JSON on local disk or Cloud Run /tmp)
 - Routing: `BrowserRouter` or `HashRouter` selected by `VITE_ROUTER_MODE` (or storage-host fallback).
 - Authentication state in `src/state/auth.tsx` stores active user in `localStorage` (`quorvium:user`).
 - Guests are generated client-side; Google auth is verified by the API.
-- API client: `src/lib/api.ts` (Axios, base URL from `VITE_API_BASE_URL` build-time define).
-- Product version: build-time define from `VITE_APP_VERSION`, rendered in the footer so each deployed build is identifiable.
+- API client: `src/lib/api.ts` (Axios, base URL resolved from runtime config first, then build-time fallback).
+- Runtime config file: `runtime-config.js` is loaded before app bootstrap and supplies deploy-time values (`apiBaseUrl`, OAuth client/redirect, router mode, app version) without rebuilding frontend assets.
+- Product version: rendered in the footer so each deployed build is identifiable.
 - Realtime client: `src/lib/socket.ts` uses websocket transport and joins board rooms.
 
 ### API Server (`server/`)
@@ -74,7 +75,8 @@ Core server types are defined in `server/src/types.ts`:
 
 ## Delivery and Operations
 - CI workflow (`.github/workflows/ci.yml`) runs lint, typecheck, tests, and build on PRs and pushes to `main`.
-- On `main`, CI also computes `PRODUCT_VERSION` (`YYYY.MM.DD.SEQ.commitsha`, where `SEQ` is the GitHub run number), tags/pushes API images by commit SHA and product version, deploys API to Cloud Run, and deploys client assets to the staging bucket with cache-aware upload ordering.
+- On `main`, CI computes `PRODUCT_VERSION` (`YYYY.MM.DD.SEQ.commitsha`, where `SEQ` is the GitHub run number), packages one immutable client release artifact (`client-<version>.tar.gz` + manifest checksum), tags/pushes API images by commit SHA and product version, and deploys that exact client artifact to staging (no client rebuild in deploy stage).
+- Client promotion workflow (`.github/workflows/promote-client-production.yml`) fetches the staged release artifact by product version and verifies checksum parity when publishing to production.
 - Infra code in `infra/*.tf` defines cloud resources and supporting IAM/secrets.
 
 ## Current Constraints

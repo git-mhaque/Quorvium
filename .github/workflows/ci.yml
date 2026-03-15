@@ -11,6 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       product_version: ${{ steps.version.outputs.product_version }}
+      client_release_artifact_name: ${{ steps.package_client.outputs.artifact_name }}
+      client_release_bundle_sha256: ${{ steps.package_client.outputs.artifact_sha256 }}
+      client_release_manifest_sha256: ${{ steps.package_client.outputs.manifest_sha256 }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -46,7 +49,54 @@ jobs:
         run: npm run test
 
       - name: Build project
+        env:
+          VITE_APP_VERSION: ${{ steps.version.outputs.product_version }}
         run: npm run build
+
+      - name: Package client release artifact
+        id: package_client
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          PRODUCT_VERSION: ${{ steps.version.outputs.product_version }}
+          BUILD_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p release-artifacts
+
+          ARTIFACT_NAME="client-${PRODUCT_VERSION}.tar.gz"
+          ARTIFACT_PATH="release-artifacts/${ARTIFACT_NAME}"
+          tar -C client/dist -czf "${ARTIFACT_PATH}" .
+
+          ARTIFACT_SHA256="$(shasum -a 256 "${ARTIFACT_PATH}" | awk '{print $1}')"
+          CREATED_AT_UTC="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+          cat > release-artifacts/release-manifest.json <<MANIFEST
+          {
+            "productVersion": "${PRODUCT_VERSION}",
+            "artifactName": "${ARTIFACT_NAME}",
+            "artifactSha256": "${ARTIFACT_SHA256}",
+            "gitSha": "${BUILD_SHA}",
+            "createdAtUtc": "${CREATED_AT_UTC}"
+          }
+          MANIFEST
+
+          MANIFEST_SHA256="$(shasum -a 256 release-artifacts/release-manifest.json | awk '{print $1}')"
+
+          printf '%s  %s\n' "${ARTIFACT_SHA256}" "${ARTIFACT_NAME}" > release-artifacts/client-artifact.sha256
+          printf '%s  %s\n' "${MANIFEST_SHA256}" "release-manifest.json" > release-artifacts/release-manifest.sha256
+
+          echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
+          echo "artifact_sha256=${ARTIFACT_SHA256}" >> "$GITHUB_OUTPUT"
+          echo "manifest_sha256=${MANIFEST_SHA256}" >> "$GITHUB_OUTPUT"
+
+          printf 'Client release artifact: %s\nArtifact SHA256: %s\nManifest SHA256: %s\n' "${ARTIFACT_NAME}" "${ARTIFACT_SHA256}" "${MANIFEST_SHA256}"
+
+      - name: Upload client release artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-release-${{ steps.version.outputs.product_version }}
+          path: release-artifacts/
+          if-no-files-found: error
 
   docker-publish:
     name: Build and Push Image
@@ -179,28 +229,43 @@ jobs:
       contents: read
     environment: staging
     env:
+      PRODUCT_VERSION: ${{ needs.build.outputs.product_version }}
+      ARTIFACT_NAME: ${{ needs.build.outputs.client_release_artifact_name }}
+      EXPECTED_ARTIFACT_SHA256: ${{ needs.build.outputs.client_release_bundle_sha256 }}
+      STAGING_BUCKET: ${{ secrets.STAGING_BUCKET }}
       VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
-      VITE_APP_VERSION: ${{ needs.build.outputs.product_version }}
       VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
       VITE_GOOGLE_REDIRECT_URI: ${{ secrets.VITE_GOOGLE_REDIRECT_URI }}
-      VITE_BASE_PATH: ${{ secrets.VITE_BASE_PATH }}
       VITE_ROUTER_MODE: ${{ secrets.VITE_ROUTER_MODE }}
-      STAGING_BUCKET: ${{ secrets.STAGING_BUCKET }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Download client release artifact
+        uses: actions/download-artifact@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          name: client-release-${{ needs.build.outputs.product_version }}
+          path: release-artifacts
 
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
+      - name: Validate and extract client release artifact
+        run: |
+          for key in PRODUCT_VERSION ARTIFACT_NAME EXPECTED_ARTIFACT_SHA256 STAGING_BUCKET VITE_API_BASE_URL VITE_GOOGLE_REDIRECT_URI VITE_ROUTER_MODE; do
+            if [ -z "${!key}" ]; then
+              echo "${key} secret/output is required" >&2
+              exit 1
+            fi
+          done
 
-      - name: Build client bundle
-        run: npm run build --workspace=client
+          if ! printf '%s' "${STAGING_BUCKET}" | grep -q '^gs://'; then
+            echo "STAGING_BUCKET must start with gs:// (received: ${STAGING_BUCKET})" >&2
+            exit 1
+          fi
+
+          ACTUAL_ARTIFACT_SHA256="$(shasum -a 256 "release-artifacts/${ARTIFACT_NAME}" | awk '{print $1}')"
+          if [ "${ACTUAL_ARTIFACT_SHA256}" != "${EXPECTED_ARTIFACT_SHA256}" ]; then
+            echo "Artifact checksum mismatch. Expected ${EXPECTED_ARTIFACT_SHA256}, got ${ACTUAL_ARTIFACT_SHA256}" >&2
+            exit 1
+          fi
+
+          mkdir -p client-dist
+          tar -xzf "release-artifacts/${ARTIFACT_NAME}" -C client-dist
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -213,18 +278,11 @@ jobs:
       - name: Install gsutil
         run: gcloud components install gsutil --quiet
 
-      - name: Sync bundle to staging bucket
+      - name: Deploy immutable client artifact to staging bucket
         run: |
-          if [ -z "${STAGING_BUCKET}" ]; then
-            echo "STAGING_BUCKET secret is not set" >&2
-            exit 1
-          fi
-          if ! printf '%s' "${STAGING_BUCKET}" | grep -q '^gs://'; then
-            echo "STAGING_BUCKET must start with gs:// (received: ${STAGING_BUCKET})" >&2
-            exit 1
-          fi
+          DIST_DIR="client-dist"
+          TARGET="${STAGING_BUCKET%/}"
 
-          DIST_DIR="client/dist"
           if [ ! -d "${DIST_DIR}" ]; then
             echo "Build output directory not found: ${DIST_DIR}" >&2
             exit 1
@@ -234,8 +292,7 @@ jobs:
             exit 1
           fi
 
-          TARGET="${STAGING_BUCKET%/}"
-          echo "Deploying assets to ${TARGET} with cache-safe ordering"
+          echo "Deploying release ${PRODUCT_VERSION} to ${TARGET}"
 
           if [ -d "${DIST_DIR}/assets" ]; then
             echo "Uploading hashed /assets with immutable caching"
@@ -243,14 +300,53 @@ jobs:
               rsync -r "${DIST_DIR}/assets" "${TARGET}/assets"
           fi
 
-          echo "Uploading non-HTML static files (excluding /assets) with short cache"
+          echo "Uploading non-HTML static files (excluding /assets and runtime-config.js) with short cache"
           gsutil -m -h "Cache-Control:public,max-age=300" \
-            rsync -r -x '(^|/)assets/|\.html$' "${DIST_DIR}" "${TARGET}"
+            rsync -r -x '(^|/)assets/|\.html$|runtime-config\.js$' "${DIST_DIR}" "${TARGET}"
 
-          echo "Uploading HTML entrypoints last with no-store"
+          cat > runtime-config.js <<CONFIG
+          window.__QUORVIUM_RUNTIME_CONFIG__ = {
+            apiBaseUrl: "${VITE_API_BASE_URL}",
+            googleClientId: "${VITE_GOOGLE_CLIENT_ID}",
+            googleRedirectUri: "${VITE_GOOGLE_REDIRECT_URI}",
+            routerMode: "${VITE_ROUTER_MODE}",
+            appVersion: "${PRODUCT_VERSION}"
+          };
+          CONFIG
+
+          echo "Uploading runtime-config.js and HTML entrypoints with no-store"
+          gsutil -h "Cache-Control:no-store,max-age=0" cp runtime-config.js "${TARGET}/runtime-config.js"
           for file in index.html 404.html; do
             if [ -f "${DIST_DIR}/${file}" ]; then
-              gsutil -h "Cache-Control:no-store,max-age=0" \
-                cp "${DIST_DIR}/${file}" "${TARGET}/${file}"
+              gsutil -h "Cache-Control:no-store,max-age=0" cp "${DIST_DIR}/${file}" "${TARGET}/${file}"
             fi
           done
+
+      - name: Publish release bundle + manifest to staging release catalog
+        run: |
+          TARGET="${STAGING_BUCKET%/}"
+          RELEASE_PREFIX="${TARGET}/_releases/${PRODUCT_VERSION}"
+
+          gsutil -h "Cache-Control:public,max-age=31536000,immutable" \
+            cp "release-artifacts/${ARTIFACT_NAME}" "${RELEASE_PREFIX}/${ARTIFACT_NAME}"
+          gsutil -h "Cache-Control:no-store,max-age=0" \
+            cp "release-artifacts/release-manifest.json" "${RELEASE_PREFIX}/release-manifest.json"
+          gsutil -h "Cache-Control:no-store,max-age=0" \
+            cp "release-artifacts/client-artifact.sha256" "${RELEASE_PREFIX}/client-artifact.sha256"
+          gsutil -h "Cache-Control:no-store,max-age=0" \
+            cp "release-artifacts/release-manifest.sha256" "${RELEASE_PREFIX}/release-manifest.sha256"
+
+      - name: Verify staged release checksum
+        run: |
+          TARGET="${STAGING_BUCKET%/}"
+          RELEASE_PREFIX="${TARGET}/_releases/${PRODUCT_VERSION}"
+
+          gsutil cp "${RELEASE_PREFIX}/${ARTIFACT_NAME}" ./staging-release.tar.gz
+          STAGING_SHA256="$(shasum -a 256 ./staging-release.tar.gz | awk '{print $1}')"
+
+          if [ "${STAGING_SHA256}" != "${EXPECTED_ARTIFACT_SHA256}" ]; then
+            echo "Staging release checksum mismatch. Expected ${EXPECTED_ARTIFACT_SHA256}, got ${STAGING_SHA256}" >&2
+            exit 1
+          fi
+
+          printf 'Staging release verified: %s (%s)\n' "${PRODUCT_VERSION}" "${STAGING_SHA256}"

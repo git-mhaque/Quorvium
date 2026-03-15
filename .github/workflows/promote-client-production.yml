@@ -1,0 +1,212 @@
+name: Promote Client Artifact to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      product_version:
+        description: "Product version to promote (YYYY.MM.DD.SEQ.commitsha)"
+        required: true
+        type: string
+
+jobs:
+  fetch-release-from-staging:
+    name: Fetch Release from Staging
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+    outputs:
+      artifact_name: ${{ steps.fetch.outputs.artifact_name }}
+      artifact_sha256: ${{ steps.fetch.outputs.artifact_sha256 }}
+      manifest_sha256: ${{ steps.fetch.outputs.manifest_sha256 }}
+    env:
+      PRODUCT_VERSION: ${{ inputs.product_version }}
+      STAGING_BUCKET: ${{ secrets.STAGING_BUCKET }}
+    steps:
+      - name: Authenticate to Google Cloud (staging)
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Install gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install gsutil
+        run: gcloud components install gsutil --quiet
+
+      - name: Fetch and verify staged release artifact
+        id: fetch
+        run: |
+          if [ -z "${PRODUCT_VERSION}" ]; then
+            echo "product_version input is required" >&2
+            exit 1
+          fi
+          if [ -z "${STAGING_BUCKET}" ]; then
+            echo "STAGING_BUCKET secret is required" >&2
+            exit 1
+          fi
+          if ! printf '%s' "${STAGING_BUCKET}" | grep -q '^gs://'; then
+            echo "STAGING_BUCKET must start with gs:// (received: ${STAGING_BUCKET})" >&2
+            exit 1
+          fi
+
+          RELEASE_PREFIX="${STAGING_BUCKET%/}/_releases/${PRODUCT_VERSION}"
+          mkdir -p promotion-release
+
+          gsutil cp "${RELEASE_PREFIX}/release-manifest.json" promotion-release/release-manifest.json
+          ARTIFACT_NAME="$(jq -r '.artifactName' promotion-release/release-manifest.json)"
+          ARTIFACT_SHA256="$(jq -r '.artifactSha256' promotion-release/release-manifest.json)"
+
+          if [ -z "${ARTIFACT_NAME}" ] || [ "${ARTIFACT_NAME}" = "null" ]; then
+            echo "release-manifest.json does not contain artifactName" >&2
+            exit 1
+          fi
+          if [ -z "${ARTIFACT_SHA256}" ] || [ "${ARTIFACT_SHA256}" = "null" ]; then
+            echo "release-manifest.json does not contain artifactSha256" >&2
+            exit 1
+          fi
+
+          gsutil cp "${RELEASE_PREFIX}/${ARTIFACT_NAME}" "promotion-release/${ARTIFACT_NAME}"
+          ACTUAL_SHA256="$(shasum -a 256 "promotion-release/${ARTIFACT_NAME}" | awk '{print $1}')"
+
+          if [ "${ACTUAL_SHA256}" != "${ARTIFACT_SHA256}" ]; then
+            echo "Staging release checksum mismatch. Expected ${ARTIFACT_SHA256}, got ${ACTUAL_SHA256}" >&2
+            exit 1
+          fi
+
+          MANIFEST_SHA256="$(shasum -a 256 promotion-release/release-manifest.json | awk '{print $1}')"
+          printf '%s  %s\n' "${ARTIFACT_SHA256}" "${ARTIFACT_NAME}" > promotion-release/client-artifact.sha256
+          printf '%s  %s\n' "${MANIFEST_SHA256}" "release-manifest.json" > promotion-release/release-manifest.sha256
+
+          echo "artifact_name=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
+          echo "artifact_sha256=${ARTIFACT_SHA256}" >> "$GITHUB_OUTPUT"
+          echo "manifest_sha256=${MANIFEST_SHA256}" >> "$GITHUB_OUTPUT"
+
+          printf 'Fetched staged release %s with checksum %s\n' "${PRODUCT_VERSION}" "${ARTIFACT_SHA256}"
+
+      - name: Upload promotion payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-release-${{ inputs.product_version }}
+          path: promotion-release/
+          if-no-files-found: error
+
+  deploy-client-production:
+    name: Deploy Client (production)
+    runs-on: ubuntu-latest
+    needs: fetch-release-from-staging
+    environment: production
+    permissions:
+      contents: read
+    env:
+      PRODUCT_VERSION: ${{ inputs.product_version }}
+      ARTIFACT_NAME: ${{ needs.fetch-release-from-staging.outputs.artifact_name }}
+      EXPECTED_ARTIFACT_SHA256: ${{ needs.fetch-release-from-staging.outputs.artifact_sha256 }}
+      PRODUCTION_BUCKET: ${{ secrets.PRODUCTION_BUCKET }}
+      VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+      VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+      VITE_GOOGLE_REDIRECT_URI: ${{ secrets.VITE_GOOGLE_REDIRECT_URI }}
+      VITE_ROUTER_MODE: ${{ secrets.VITE_ROUTER_MODE }}
+    steps:
+      - name: Download promotion payload
+        uses: actions/download-artifact@v4
+        with:
+          name: client-release-${{ inputs.product_version }}
+          path: promotion-release
+
+      - name: Validate and extract promotion artifact
+        run: |
+          for key in PRODUCT_VERSION ARTIFACT_NAME EXPECTED_ARTIFACT_SHA256 PRODUCTION_BUCKET VITE_API_BASE_URL VITE_GOOGLE_REDIRECT_URI VITE_ROUTER_MODE; do
+            if [ -z "${!key}" ]; then
+              echo "${key} secret/output is required" >&2
+              exit 1
+            fi
+          done
+
+          if ! printf '%s' "${PRODUCTION_BUCKET}" | grep -q '^gs://'; then
+            echo "PRODUCTION_BUCKET must start with gs:// (received: ${PRODUCTION_BUCKET})" >&2
+            exit 1
+          fi
+
+          ACTUAL_SHA256="$(shasum -a 256 "promotion-release/${ARTIFACT_NAME}" | awk '{print $1}')"
+          if [ "${ACTUAL_SHA256}" != "${EXPECTED_ARTIFACT_SHA256}" ]; then
+            echo "Promotion artifact checksum mismatch. Expected ${EXPECTED_ARTIFACT_SHA256}, got ${ACTUAL_SHA256}" >&2
+            exit 1
+          fi
+
+          mkdir -p client-dist
+          tar -xzf "promotion-release/${ARTIFACT_NAME}" -C client-dist
+
+      - name: Authenticate to Google Cloud (production)
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Install gcloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install gsutil
+        run: gcloud components install gsutil --quiet
+
+      - name: Deploy artifact to production bucket
+        run: |
+          DIST_DIR="client-dist"
+          TARGET="${PRODUCTION_BUCKET%/}"
+
+          if [ ! -d "${DIST_DIR}" ]; then
+            echo "Build output directory not found: ${DIST_DIR}" >&2
+            exit 1
+          fi
+          if [ ! -f "${DIST_DIR}/index.html" ]; then
+            echo "Build output missing index.html" >&2
+            exit 1
+          fi
+
+          if [ -d "${DIST_DIR}/assets" ]; then
+            gsutil -m -h "Cache-Control:public,max-age=31536000,immutable" \
+              rsync -r "${DIST_DIR}/assets" "${TARGET}/assets"
+          fi
+
+          gsutil -m -h "Cache-Control:public,max-age=300" \
+            rsync -r -x '(^|/)assets/|\.html$|runtime-config\.js$' "${DIST_DIR}" "${TARGET}"
+
+          cat > runtime-config.js <<CONFIG
+          window.__QUORVIUM_RUNTIME_CONFIG__ = {
+            apiBaseUrl: "${VITE_API_BASE_URL}",
+            googleClientId: "${VITE_GOOGLE_CLIENT_ID}",
+            googleRedirectUri: "${VITE_GOOGLE_REDIRECT_URI}",
+            routerMode: "${VITE_ROUTER_MODE}",
+            appVersion: "${PRODUCT_VERSION}"
+          };
+          CONFIG
+
+          gsutil -h "Cache-Control:no-store,max-age=0" cp runtime-config.js "${TARGET}/runtime-config.js"
+          for file in index.html 404.html; do
+            if [ -f "${DIST_DIR}/${file}" ]; then
+              gsutil -h "Cache-Control:no-store,max-age=0" cp "${DIST_DIR}/${file}" "${TARGET}/${file}"
+            fi
+          done
+
+      - name: Publish release metadata to production and verify checksum parity
+        run: |
+          TARGET="${PRODUCTION_BUCKET%/}"
+          RELEASE_PREFIX="${TARGET}/_releases/${PRODUCT_VERSION}"
+
+          gsutil -h "Cache-Control:public,max-age=31536000,immutable" \
+            cp "promotion-release/${ARTIFACT_NAME}" "${RELEASE_PREFIX}/${ARTIFACT_NAME}"
+          gsutil -h "Cache-Control:no-store,max-age=0" \
+            cp "promotion-release/release-manifest.json" "${RELEASE_PREFIX}/release-manifest.json"
+          gsutil -h "Cache-Control:no-store,max-age=0" \
+            cp "promotion-release/client-artifact.sha256" "${RELEASE_PREFIX}/client-artifact.sha256"
+          gsutil -h "Cache-Control:no-store,max-age=0" \
+            cp "promotion-release/release-manifest.sha256" "${RELEASE_PREFIX}/release-manifest.sha256"
+
+          gsutil cp "${RELEASE_PREFIX}/${ARTIFACT_NAME}" ./production-release.tar.gz
+          PRODUCTION_SHA256="$(shasum -a 256 ./production-release.tar.gz | awk '{print $1}')"
+
+          if [ "${PRODUCTION_SHA256}" != "${EXPECTED_ARTIFACT_SHA256}" ]; then
+            echo "Production checksum mismatch. Expected ${EXPECTED_ARTIFACT_SHA256}, got ${PRODUCTION_SHA256}" >&2
+            exit 1
+          fi
+
+          printf 'Promotion checksum verified: %s (%s)\n' "${PRODUCT_VERSION}" "${PRODUCTION_SHA256}"

@@ -30,6 +30,8 @@ Populate environment values before starting the app:
 |                   | `VITE_GOOGLE_CLIENT_ID`      | same as server                   |
 |                   | `VITE_GOOGLE_REDIRECT_URI`   | `http://localhost:5173/`         |
 
+For deployed environments, frontend runtime values are injected via `runtime-config.js` at deploy time. This allows staging and production to use the same built frontend artifact.
+
 Only Google-authenticated users can create boards. Visitors may still join existing boards without signing in, but they collaborate anonymously. Signed-in owners can manage boards from the home page via a "My Boards" table (name, created, updated, quick create, join link, copy, delete).
 
 ## Developing locally
@@ -58,6 +60,8 @@ CI parity check before PR:
 ```bash
 npm run lint && npm run typecheck && npm run test --cache=/tmp/npm-cache && npm run build
 ```
+
+On `main` pushes, CI also produces an immutable frontend release bundle (`client-<product_version>.tar.gz`) and deploys that exact artifact to staging. Production promotion reuses the same artifact and verifies checksums.
 
 The exchange of Google authorization codes happens in `server/src/routes/auth.ts`, which stores access/refresh tokens inside secure HTTP-only cookies (`quorvium_google_access`, `quorvium_google_refresh`). These cookies support future server-side Google API integrations while keeping raw tokens out of browser JavaScript.
 

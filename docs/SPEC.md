@@ -7,8 +7,9 @@ Implementation details and runtime topology are documented in `ARCHITECTURE.md`.
 ## Product Versioning
 - Every CI build generates a product version string in the format `YYYY.MM.DD.SEQ.commitsha`.
 - `SEQ` is sourced from the GitHub Actions run number for that build.
-- The version is injected into the client build and displayed in the in-app footer for operator/user visibility.
-- The same version is attached to released container images to support staging-to-production promotion by version.
+- Frontend deploy-time values are provided via `runtime-config.js`, so the same built frontend artifact can be promoted across environments without rebuild.
+- The version is displayed in the in-app footer for operator/user visibility.
+- The same version is attached to released container images and client artifact manifests to support staging-to-production promotion by version and checksum.
 
 ## Authentication & Access
 - **Google Sign-In (OAuth 2.0):** Product behavior requires Google-authenticated users to create boards. The current UX enforces this at the client layer.

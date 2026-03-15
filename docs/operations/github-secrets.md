@@ -48,12 +48,12 @@ Script behavior:
 | `GOOGLE_CLIENT_SECRET_SECRET_ID` | Secret Manager secret ID containing OAuth client secret. | Secret Manager | Example: `google-oauth-client-secret-staging`; deploy job binds `GOOGLE_CLIENT_SECRET` from `latest`. |
 | `GOOGLE_REDIRECT_URI` | OAuth redirect URI for the staging client. | Application config | e.g., `https://staging.quorvium.com`. |
 | `CLIENT_ORIGIN` | Frontend origin allowed by CORS. | Vite deployment config | e.g., `https://staging.quorvium.com`. |
-| `VITE_API_BASE_URL` | API base URL injected into client build. | Cloud Run URL | Example: `https://quorvium-api-staging-a4nw.run.app`. |
+| `VITE_API_BASE_URL` | API base URL written into `runtime-config.js` during deploy. | Cloud Run URL | Example: `https://quorvium-api-staging-a4nw.run.app`. |
 | `VITE_GOOGLE_CLIENT_ID` | Client-side OAuth ID. | Same as `GOOGLE_CLIENT_ID` unless split. | Optional if staging UI uses the same OAuth app. |
-| `VITE_GOOGLE_REDIRECT_URI` | Client redirect URL. | Vite environment config | Typically matches `GOOGLE_REDIRECT_URI`. |
-| `VITE_BASE_PATH` | Base path for Vite asset URLs. | Vite config | Use `/` for domain root hosting (`staging.quorvium.com`). |
+| `VITE_GOOGLE_REDIRECT_URI` | Client redirect URL written into `runtime-config.js`. | Frontend runtime config | Typically matches `GOOGLE_REDIRECT_URI`. |
+| `VITE_BASE_PATH` | Base path for Vite asset URLs. | Vite config | Legacy/optional for local builds. CI artifact promotion path does not require per-environment base-path secrets. |
 | `VITE_ROUTER_MODE` | Client routing strategy. | Frontend runtime config | Use `browser` for the custom-domain setup behind HTTPS LB. |
-| `STAGING_BUCKET` | Google Cloud Storage bucket URI for static client hosting. | Cloud Storage (`gs://...`) | Example: `gs://staging.quorvium.com`. |
+| `STAGING_BUCKET` | Google Cloud Storage bucket URI for static client hosting and release catalog path (`_releases/<product_version>`). | Cloud Storage (`gs://...`) | Example: `gs://staging.quorvium.com`. |
 
 `VITE_APP_VERSION` is intentionally not stored as a GitHub secret. CI computes it on each build as `YYYY.MM.DD.SEQ.commitsha` (`SEQ` = GitHub run number) and injects it at client build time.
 
@@ -94,5 +94,5 @@ Notes:
 ## Next Steps
 
 - Automate diff checks that compare Terraform outputs with GitHub secret values during pipeline runs.
-- Keep `.github/workflows/ci.yml` in sync with this map; the staging Cloud Run deploy job now reads project/region/service plus runtime OAuth and CORS settings from the `staging` environment.
+- Keep `.github/workflows/ci.yml` in sync with this map; the staging deploy now publishes immutable frontend release bundles and writes runtime config at deploy time.
 - Document rotation history and owners in your team runbook/process notes.
