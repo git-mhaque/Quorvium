@@ -12,4 +12,4 @@ Default runtime context for current runbooks:
 1. [OAuth Secret Management](./oauth-secret-management.md)
 2. [Staging Client Domain Setup (`staging.quorvium.com`)](./staging-client-domain-setup.md)
 3. [GitHub Secrets Map + Bootstrap Script](./github-secrets.md)
-4. [Client Artifact Promotion](./client-artifact-promotion.md)
+4. [Release Promotion (Client + API)](./client-artifact-promotion.md)

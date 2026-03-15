@@ -24,7 +24,7 @@ Use this file for reliability, performance, security, developer experience, and 
 - Deploy same exact artifact to staging and promote the identical artifact to production after approval.
 - Add promotion verification step (artifact checksum/hash match between staging and production).
 - Update docs/workflows to describe rollback and promotion-by-artifact process.
-- Implementation summary: `runtime-config.js` now injects deploy-time client values, CI packages `client-<product_version>.tar.gz` + manifest checksum, staging deploy uses downloaded immutable artifact (no rebuild), and production promotion is handled by `promote-client-production.yml` with checksum parity verification.
+- Implementation summary: `runtime-config.js` now injects deploy-time client values, CI packages `client-<product_version>.tar.gz` + manifest checksum, staging deploy uses downloaded immutable artifact (no rebuild), and production promotion is handled by `promote-release-production.yml` with checksum parity verification.
 
 ### TECH-003 Scope
 - Provision production-specific infrastructure and deployment identity boundaries.

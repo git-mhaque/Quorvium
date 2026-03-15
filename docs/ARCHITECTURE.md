@@ -16,6 +16,22 @@ API Service (Express + Socket.IO)
 File Store (JSON on local disk or Cloud Run /tmp)
 ```
 
+## Architecture Diagrams
+
+Regenerate SVGs from Mermaid sources with:
+
+```sh
+bash docs/diagrams/render-diagrams.sh
+```
+
+### Runtime (Staging)
+![Runtime (Staging) Diagram](./diagrams/runtime-staging.svg)
+Source: [`docs/diagrams/runtime-staging.mmd`](./diagrams/runtime-staging.mmd)
+
+### Artifact Promotion Flow (Client + API)
+![Artifact Promotion Flow Diagram](./diagrams/artifact-promotion.svg)
+Source: [`docs/diagrams/artifact-promotion.mmd`](./diagrams/artifact-promotion.mmd)
+
 ## Runtime Topology
 ### Local Development
 - Client runs on `http://localhost:5173`.
@@ -76,7 +92,7 @@ Core server types are defined in `server/src/types.ts`:
 ## Delivery and Operations
 - CI workflow (`.github/workflows/ci.yml`) runs lint, typecheck, tests, and build on PRs and pushes to `main`.
 - On `main`, CI computes `PRODUCT_VERSION` (`YYYY.MM.DD.SEQ.commitsha`, where `SEQ` is the GitHub run number), packages one immutable client release artifact (`client-<version>.tar.gz` + manifest checksum), tags/pushes API images by commit SHA and product version, and deploys that exact client artifact to staging (no client rebuild in deploy stage).
-- Client promotion workflow (`.github/workflows/promote-client-production.yml`) fetches the staged release artifact by product version and verifies checksum parity when publishing to production.
+- Release promotion workflow (`.github/workflows/promote-release-production.yml`) promotes both API image and client artifact by `product_version`, with digest/checksum parity checks when publishing to production.
 - Infra code in `infra/*.tf` defines cloud resources and supporting IAM/secrets.
 
 ## Current Constraints

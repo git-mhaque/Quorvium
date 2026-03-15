@@ -1,0 +1,8 @@
+flowchart LR
+  U[User Browser] -->|HTTPS| LB[Global HTTPS LB<br/>staging.quorvium.com]
+  LB --> BB[Backend Bucket<br/>staging.quorvium.com]
+  BB --> RC[runtime-config.js]
+  BB --> SPA[React/Vite SPA assets]
+  SPA --> API[Cloud Run API<br/>quorvium-api-staging]
+  API --> SM[Secret Manager<br/>google-oauth-client-secret-staging]
+  API --> DATA["/tmp quorvium-data<br/>ephemeral"]

@@ -1,0 +1,14 @@
+flowchart TD
+  GH[GitHub Actions CI] --> BUILD[Build once]
+  BUILD --> ART[client-VERSION.tar.gz<br/>+ manifest + sha256]
+  BUILD --> API_TAG[Tag API image<br/>:GIT_SHA and :VERSION]
+  ART --> STAGE[Deploy client artifact to staging bucket]
+  STAGE --> CAT[_releases/VERSION]
+  API_TAG --> STAGE_IMG[Push staging API image<br/>repo:VERSION]
+  CAT --> PROMOTE[Manual promote workflow]
+  STAGE_IMG --> PROMOTE
+  PROMOTE --> PROD_CLIENT[Deploy same client artifact to production bucket]
+  PROMOTE --> PROD_API[Promote API image to production Artifact Registry]
+  PROD_API --> CR_DEPLOY[Deploy API Cloud Run revision]
+  PROMOTE --> VERIFY_CLIENT[Client checksum parity verify]
+  PROMOTE --> VERIFY_API[API digest parity verify]
