@@ -3,6 +3,9 @@
 ## Purpose
 This document describes Quorvium's current runtime architecture, component boundaries, and key data flows.
 
+## Related Decisions
+- [`ADR-001-PERSISTENT-DATASTORE.md`](./ADR-001-PERSISTENT-DATASTORE.md): persistent datastore selection for real-time collaboration workload.
+
 ## System Context
 ```text
 Browser Client (React + Vite)
