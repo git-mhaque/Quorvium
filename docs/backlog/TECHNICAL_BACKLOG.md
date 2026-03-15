@@ -13,6 +13,8 @@ Use this file for reliability, performance, security, developer experience, and 
 | TECH-003 | Production environment and infrastructure setup | Production environment resources/identities are not yet separated and provisioned. | p0 | infra/ops | proposed | unassigned | [#3](https://github.com/git-mhaque/Quorvium/issues/3) |
 | TECH-004 | Promotion and deployment flow to production | No formal gated production promotion path with smoke/rollback controls. | p0 | infra/ops/release | proposed | unassigned | [#4](https://github.com/git-mhaque/Quorvium/issues/4) |
 | TECH-005 | Split staging deployer and runtime service accounts | Staging runtime and CI previously shared one identity, increasing blast radius and violating least privilege. | p0 | infra/security/ops | done | unassigned | [#5](https://github.com/git-mhaque/Quorvium/issues/5) |
+| TECH-006 | Automate staging frontend LB, TLS cert, and HTTP->HTTPS redirect | Staging custom domain edge resources are manually configured, creating drift/recovery risk. | p1 | infra/frontend/ops | proposed | unassigned | [#6](https://github.com/git-mhaque/Quorvium/issues/6) |
+| TECH-007 | Automate production frontend edge stack (LB, TLS, redirect, DNS runbook) | Production frontend edge stack is not yet codified, blocking repeatable artifact promotion. | p0 | infra/frontend/ops | proposed | unassigned | [#7](https://github.com/git-mhaque/Quorvium/issues/7) |
 
 ## Item Notes
 
@@ -39,6 +41,16 @@ Use this file for reliability, performance, security, developer experience, and 
 - Move GitHub `staging` `GCP_SA_KEY` to deployer SA key material.
 - Remove deploy-only project roles from runtime SA and revoke its user-managed keys.
 - Keep deployer access scoped to deploy needs, including `roles/iam.serviceAccountUser` on the runtime SA and staging bucket object write access.
+
+### TECH-006 Scope
+- Terraform-manage staging external HTTP(S) load balancer resources for `staging.quorvium.com`.
+- Include managed certificate, backend bucket wiring, and HTTP->HTTPS redirect resources.
+- Add migration/import guidance for existing manually created staging resources.
+
+### TECH-007 Scope
+- Terraform-manage production frontend edge stack resources.
+- Document DNS cutover + certificate validation workflow for external registrar management.
+- Align production promotion prerequisites with edge-stack infrastructure outputs and runbooks.
 
 ## Intake Template
 

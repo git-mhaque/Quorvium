@@ -62,8 +62,9 @@ This directory contains Terraform configuration that provisions the minimal prod
    gsutil uniformbucketlevelaccess set on gs://staging.quorvium.com
    gsutil iam ch allUsers:objectViewer gs://staging.quorvium.com
    ```
-   Upload the `client/dist` build with `gsutil -m rsync -r client/dist gs://staging.quorvium.com`. The CI workflow expects GitHub environment secrets named `STAGING_BUCKET` (`gs://staging.quorvium.com`) and `VITE_BASE_PATH` (use `/` for domain-root hosting) so Vite emits the correct asset URLs.
-6. In the GitHub `staging` environment, configure deploy settings used by `.github/workflows/ci.yml`: `GCP_SA_KEY`, `ARTIFACT_REGISTRY_REPO`, `GCP_PROJECT_ID`, `GCP_REGION`, `CLOUD_RUN_SERVICE`, `CLIENT_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI`, and `GOOGLE_CLIENT_SECRET_SECRET_ID`.
+   Upload the `client/dist` build with `gsutil -m rsync -r client/dist gs://staging.quorvium.com`. The CI workflow expects GitHub environment secret `STAGING_BUCKET` (`gs://staging.quorvium.com`) and runtime-config values (`VITE_API_BASE_URL`, `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_REDIRECT_URI`, `VITE_ROUTER_MODE`) in the `staging` environment.
+   For `https://staging.quorvium.com`, also configure an external HTTP(S) load balancer + managed certificate + HTTP->HTTPS redirect as documented in `docs/operations/staging-client-domain-setup.md`.
+6. In the GitHub `staging` environment, configure deploy settings used by `.github/workflows/ci.yml`: `GCP_SA_KEY`, `ARTIFACT_REGISTRY_REPO`, `GCP_PROJECT_ID`, `GCP_REGION`, `CLOUD_RUN_SERVICE`, `CLIENT_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI`, `GOOGLE_CLIENT_SECRET_SECRET_ID`, `STAGING_BUCKET`, `VITE_API_BASE_URL`, `VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_REDIRECT_URI`, and `VITE_ROUTER_MODE`.
    Set `GCP_SA_KEY` to a key created from `github-deployer-staging@quorvium.iam.gserviceaccount.com` (not the runtime SA).
 7. Initialize the workspace:
    ```sh
@@ -111,3 +112,4 @@ This directory contains Terraform configuration that provisions the minimal prod
   ```
   Ensure the GitHub deployer service account has `roles/artifactregistry.writer` on the project or repository.
 - Static hosting for the client is managed manually via Cloud Storage. Use `gsutil rsync` after each Vite build (or CI deploy job) to keep `gs://staging.quorvium.com` in sync.
+- External LB/certificate/HTTP-redirect resources for `staging.quorvium.com` are currently manual and are not yet provisioned by the Terraform in this directory.

@@ -17,11 +17,45 @@ gcloud config set run/region australia-southeast1
 gcloud config set compute/region australia-southeast1
 ```
 
+## Current Live Snapshot (March 15, 2026)
+
+The staging custom-domain stack is currently live with these resources:
+
+- Global IPv4: `136.110.208.136`
+- HTTPS forwarding rule (`443`): `staging-quorvium-frontend`
+- HTTP forwarding rule (`80`): `staging-quorvium-frontend-forwarding-rule`
+- HTTPS proxy: `staging-quorvium-lb-target-proxy`
+- HTTP proxy (redirect): `staging-quorvium-frontend-target-proxy`
+- HTTPS URL map: `staging-quorvium-lb`
+- HTTP redirect URL map: `staging-quorvium-frontend-redirect`
+- Backend bucket: `staging-quorvium-bucket` (GCS bucket `staging.quorvium.com`)
+- Managed certificate: `staging-quorvium-v2` (status `ACTIVE`)
+
+Quick verification:
+
+```sh
+gcloud compute forwarding-rules list --global \
+  --format='table(name,IPAddress,portRange,target)'
+gcloud compute target-https-proxies list \
+  --format='table(name,urlMap,sslCertificates)'
+gcloud compute target-http-proxies list \
+  --format='table(name,urlMap)'
+gcloud compute backend-buckets list \
+  --format='table(name,bucketName,enableCdn)'
+gcloud compute ssl-certificates list \
+  --format='table(name,type,managed.status,managed.domains)'
+
+dig +short staging.quorvium.com A
+curl -I http://staging.quorvium.com
+curl -I https://staging.quorvium.com
+```
+
 ## Architecture Notes
 
 - Direct `CNAME` from `staging` to `c.storage.googleapis.com` supports `http://` only.
 - `https://staging.quorvium.com` requires an External HTTPS Load Balancer with a Google-managed certificate.
 - Hiding `/index.html` is controlled by bucket website settings (`web-main-page-suffix`), not DNS.
+- Current automation state: bucket deploy is automated in GitHub Actions, but LB/certificate/redirect resources are still manually managed (not Terraform-managed yet).
 
 ## Prerequisites
 
@@ -141,17 +175,20 @@ Use this only to confirm content is reachable before HTTPS cutover.
     - `AAAA`: empty unless IPv6 frontend is intentionally configured
 11. Monitor certificate provisioning:
    ```sh
+   CERT_NAME="staging-quorvium-v2"
+   ```
+   ```sh
    gcloud compute ssl-certificates list \
      --format="table(name,type,managed.status,managed.domainStatus,managed.domains)"
 
-   gcloud compute ssl-certificates describe staging-quorvium --global \
+   gcloud compute ssl-certificates describe "${CERT_NAME}" --global \
      --format="yaml(managed.status,managed.domainStatus,managed.domains)"
    ```
    Optional watch loop:
    ```sh
    while true; do
      date
-     gcloud compute ssl-certificates describe staging-quorvium --global \
+     gcloud compute ssl-certificates describe "${CERT_NAME}" --global \
        --format="yaml(managed.status,managed.domainStatus)"
      sleep 120
    done

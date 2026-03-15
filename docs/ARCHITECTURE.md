@@ -24,7 +24,7 @@ File Store (JSON on local disk or Cloud Run /tmp)
 
 ### Staging Deployment
 - API container runs on Cloud Run.
-- Client static bundle is deployed to a Cloud Storage bucket.
+- Client static bundle is deployed to a Cloud Storage bucket and served through an external HTTP(S) load balancer (`staging.quorvium.com`) with managed TLS and HTTP->HTTPS redirect.
 - CI/CD pipeline is defined in `.github/workflows/ci.yml`.
 - Terraform under `infra/` provisions baseline cloud resources and related IAM/secrets plumbing.
 
