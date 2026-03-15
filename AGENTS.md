@@ -29,8 +29,12 @@
 |   `-- package.json
 |-- docs/
 |   |-- SPEC.md
-|   |-- ARCHITECTURE.md
-|   |-- PRODUCTION_READINESS_PLAN.md
+|   |-- architecture/
+|   |   |-- ARCHITECTURE.md
+|   |   |-- adr/
+|   |   `-- diagrams/
+|   |-- plans/
+|   |   `-- PRODUCTION_READINESS_PLAN.md
 |   `-- operations/
 |-- .github/
 |   `-- workflows/
@@ -97,7 +101,7 @@
 
 ## Documentation Update Rules
 - If product behavior changes, update `docs/SPEC.md` in the same change.
-- If architecture, deployment topology, or core data flow changes, update `docs/ARCHITECTURE.md`.
+- If architecture, deployment topology, or core data flow changes, update `docs/architecture/ARCHITECTURE.md`.
 - If auth, deployment, or secrets handling changes, update relevant docs under `docs/operations/`.
 - Keep AGENT guidance and docs aligned with the current repository state; remove stale paths/commands when discovered.
 

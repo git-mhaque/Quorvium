@@ -2,7 +2,7 @@
 
 ## Overview
 Quorvium is a collaborative whiteboard for distributed teams to capture and organize ideas in real time. The application consists of a React/Vite client and an Express + Socket.IO backend, with TypeScript across the stack.
-Implementation details and runtime topology are documented in `ARCHITECTURE.md`.
+Implementation details and runtime topology are documented in `architecture/ARCHITECTURE.md`.
 
 ## Product Versioning
 - Every CI build generates a product version string in the format `YYYY.MM.DD.SEQ.commitsha`.

@@ -21,19 +21,19 @@ gcloud config set compute/region australia-southeast1
 
 1. Schedule the rotation in `#quorvium-ops` at least 24 hours ahead and confirm no overlapping releases.
 2. Generate a new client secret in the Google Cloud Console and download it as JSON.
-3. Update Google Secret Manager:
+3. Update Google Secret Manager (staging):
    ```sh
-   gcloud secrets versions add google-oauth-client-secret --data-file=client-secret.json
+   gcloud secrets versions add google-oauth-client-secret-staging --data-file=client-secret.json
    ```
-4. Update GitHub environment secrets (`GOOGLE_CLIENT_SECRET`) for both staging and production to the same value.
-5. Redeploy Cloud Run (stage first) so the new secret version is picked up. Trigger a manual smoke test of Google sign-in.
-6. Delete the downloaded JSON file from your workstation and note the rotation in the ops log (timestamp, operator, validation steps).
+4. If production is configured with a separate secret, publish a new version there as well.
+5. Confirm GitHub environment secret `GOOGLE_CLIENT_SECRET_SECRET_ID` points to the expected Secret Manager secret ID for each environment.
+6. Redeploy Cloud Run (stage first) so the new secret version is picked up. Trigger a manual smoke test of Google sign-in.
+7. Delete the downloaded JSON file from your workstation and note the rotation in the ops log (timestamp, operator, validation steps).
 
 ## Validation Checklist
 
 - After every rotation, run the CI workflow that reads from the staging environment to confirm `GOOGLE_CLIENT_SECRET` matches the latest Secret Manager version.
 - If the client ID or redirect URI change, update:
-  - Terraform variables (`google_client_id`, `google_redirect_uri`, `client_origin`).
   - GitHub environment secrets (`GOOGLE_CLIENT_ID`, `GOOGLE_REDIRECT_URI`, `CLIENT_ORIGIN`, and the Vite equivalents).
   - `.env.example` files if the change impacts local development.
 - Redirect URI values must match exactly between app config and Google OAuth credentials. `https://staging.quorvium.com` and `https://staging.quorvium.com/` are different.
@@ -48,11 +48,12 @@ gcloud config set compute/region australia-southeast1
 
 ## Cost Guardrails
 
-- Keep Cloud Run `max_instance_count` at the Terraform default (`5`) while using file-backed storage to prevent runaway spend.
+- Keep Cloud Run `max_instance_count` at the Terraform default (`5`) unless load testing justifies increase.
 - Configure a project-level budget alert at $200/month and route alerts to `finops@quorvium.dev`. This covers Cloud Run, Secret Manager, and Artifact Registry usage during testing.
 - Document any change expected to increase monthly spend by more than 10% (for example, raising instance limits) before applying Terraform.
 
-## Storage Revisit Trigger
+## Datastore Checks
 
-- Monitor the frequency of instance restarts. Because data lives in `/tmp/quorvium-data`, any restart erases boards.
-- Once testing requires persistence across deploys or multiple instances, migrate to the Cloud SQL plan captured in the [Production Plan](../PRODUCTION_READINESS_PLAN.md) and extend Terraform accordingly.
+- Keep staging on `DATA_STORE=firestore` in GitHub environment secrets.
+- Confirm Firestore settings in staging secrets: `FIRESTORE_PROJECT_ID`, `FIRESTORE_DATABASE_ID`, `FIRESTORE_BOARDS_COLLECTION`.
+- Track production Firestore readiness work in the [Production Readiness Plan](../plans/PRODUCTION_READINESS_PLAN.md).

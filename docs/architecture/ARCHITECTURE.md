@@ -4,7 +4,7 @@
 This document describes Quorvium's current runtime architecture, component boundaries, and key data flows.
 
 ## Related Decisions
-- [`ADR-001-PERSISTENT-DATASTORE.md`](./ADR-001-PERSISTENT-DATASTORE.md): persistent datastore selection for real-time collaboration workload.
+- [`ADR-001-PERSISTENT-DATASTORE.md`](./adr/ADR-001-PERSISTENT-DATASTORE.md): persistent datastore selection for real-time collaboration workload.
 
 ## System Context
 ```text
@@ -24,16 +24,16 @@ Storage Adapter (JSON file or Cloud Firestore)
 Regenerate SVGs from Mermaid sources with:
 
 ```sh
-bash docs/diagrams/render-diagrams.sh
+bash docs/architecture/diagrams/render-diagrams.sh
 ```
 
 ### Runtime (Staging)
 ![Runtime (Staging) Diagram](./diagrams/runtime-staging.svg)
-Source: [`docs/diagrams/runtime-staging.mmd`](./diagrams/runtime-staging.mmd)
+Source: [`docs/architecture/diagrams/runtime-staging.mmd`](./diagrams/runtime-staging.mmd)
 
 ### Artifact Promotion Flow (Client + API)
 ![Artifact Promotion Flow Diagram](./diagrams/artifact-promotion.svg)
-Source: [`docs/diagrams/artifact-promotion.mmd`](./diagrams/artifact-promotion.mmd)
+Source: [`docs/architecture/diagrams/artifact-promotion.mmd`](./diagrams/artifact-promotion.mmd)
 
 ## Runtime Topology
 ### Local Development
@@ -73,11 +73,11 @@ Source: [`docs/diagrams/artifact-promotion.mmd`](./diagrams/artifact-promotion.m
 - Ack callbacks return `{ ok: true }` or `{ ok: false, error }`.
 
 ### Persistence Layer (`server/src/store/boardStore.ts`)
-- In-memory `Map` is hydrated from JSON on first access.
-- Mutations persist full board payload back to disk.
-- Default location is `<repo>/server/data/boards.json` for local/dev.
-- In Cloud Run, `DATA_DIR` is used (workflow currently sets `/tmp/quorvium-data`).
-- Current storage model is single-node file-based and not production durable.
+- Persistence is selected through a store adapter at startup (`file` or `firestore`).
+- `file` mode hydrates an in-memory map from JSON and writes mutations back to disk.
+- Default file location is `<repo>/server/data/boards.json` for local/dev.
+- In Cloud Run, `DATA_DIR` is used for `file` mode (workflow sets `/tmp/quorvium-data`, ephemeral).
+- Staging is configured to run `firestore` mode for durable multi-instance persistence.
 
 ### Persistent Datastore Capability
 - Storage backend is selected by `DATA_STORE`.

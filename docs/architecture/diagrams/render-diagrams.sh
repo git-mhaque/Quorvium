@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-DIAGRAM_DIR="${ROOT_DIR}/docs/diagrams"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+DIAGRAM_DIR="${ROOT_DIR}/docs/architecture/diagrams"
 PUPPETEER_CONFIG="$(mktemp /tmp/quorvium-mermaid-puppeteer.XXXXXX.json)"
 
 cleanup() {
