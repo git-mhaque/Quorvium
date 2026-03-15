@@ -15,6 +15,7 @@ Use this file for reliability, performance, security, developer experience, and 
 | TECH-005 | Split staging deployer and runtime service accounts | Staging runtime and CI previously shared one identity, increasing blast radius and violating least privilege. | p0 | infra/security/ops | done | unassigned | [#5](https://github.com/git-mhaque/Quorvium/issues/5) |
 | TECH-006 | Automate staging frontend LB, TLS cert, and HTTP->HTTPS redirect | Staging custom domain edge resources are manually configured, creating drift/recovery risk. | p1 | infra/frontend/ops | proposed | unassigned | [#6](https://github.com/git-mhaque/Quorvium/issues/6) |
 | TECH-007 | Automate production frontend edge stack (LB, TLS, redirect, DNS runbook) | Production frontend edge stack is not yet codified, blocking repeatable artifact promotion. | p0 | infra/frontend/ops | proposed | unassigned | [#7](https://github.com/git-mhaque/Quorvium/issues/7) |
+| TECH-008 | Uplift and clean up infra/terraform directory | Terraform source is mixed with local state/tfvars artifacts and lacks clear environment structure, increasing drift and team operation risk. | p1 | infra/terraform/ops | proposed | unassigned | [#8](https://github.com/git-mhaque/Quorvium/issues/8) |
 
 ## Item Notes
 
@@ -51,6 +52,13 @@ Use this file for reliability, performance, security, developer experience, and 
 - Terraform-manage production frontend edge stack resources.
 - Document DNS cutover + certificate validation workflow for external registrar management.
 - Align production promotion prerequisites with edge-stack infrastructure outputs and runbooks.
+
+### TECH-008 Scope
+- Restructure Terraform into clear environment entrypoints and shared modules (for example `infra/environments/<env>` + `infra/modules`).
+- Configure remote state backend and locking for team-safe plans/applies.
+- Remove local `.tfstate` and non-example `.tfvars` from version control; keep only safe templates (for example `terraform.tfvars.example`).
+- Add reproducible init/plan/apply instructions per environment and align infra docs with the new layout.
+- Add Terraform validation checks (`fmt`/`validate`) for infra changes in CI.
 
 ## Intake Template
 
