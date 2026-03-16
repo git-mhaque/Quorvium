@@ -1,0 +1,25 @@
+flowchart LR
+  classDef phase fill:#f8f8f8,stroke:#333,stroke-width:1px,color:#111;
+
+  subgraph R1[" "]
+    direction LR
+    REVIEW["<span style='font-size:26px'><b>Review</b></span><br/><b>Agents</b> run first-pass code reviews on every PR<br/><br/><b>Engineers</b> own final approval and architectural quality"]
+    DOCUMENT["<span style='font-size:26px'><b>Document</b></span><br/><b>Agents</b> generate summaries, docs, and release notes<br/><br/><b>Engineers</b> shape narrative and record key decisions"]
+    DEPLOY["<span style='font-size:26px'><b>Deploy and Maintain</b></span><br/><b>Agents</b> triage logs, alerts, and suspect commits<br/><br/><b>Engineers</b> handle novel, high-risk, or sensitive issues"]
+  end
+
+  subgraph R2[" "]
+    direction LR
+    PLAN["<span style='font-size:26px'><b>Plan</b></span><br/><b>Agents</b> enrich specs, tickets, and dependencies<br/><br/><b>Engineers</b> prioritize, estimate, and sequence work"]
+    DESIGN["<span style='font-size:26px'><b>Design</b></span><br/><b>Agents</b> scaffold projects and components<br/><br/><b>Engineers</b> refine UX, architecture, and constraints"]
+    BUILD["<span style='font-size:26px'><b>Build</b></span><br/><b>Agents</b> implement features, wiring, and fixes<br/><br/><b>Engineers</b> guide behavior, patterns, and tradeoffs"]
+    TEST["<span style='font-size:26px'><b>Test</b></span><br/><b>Agents</b> propose and update tests from code and specs<br/><br/><b>Engineers</b> verify coverage, edge cases, and intent"]
+  end
+
+  PLAN --> DESIGN --> BUILD --> TEST
+  REVIEW --> DOCUMENT --> DEPLOY
+
+  style R1 fill:#ffffff,stroke:#ffffff
+  style R2 fill:#ffffff,stroke:#ffffff
+
+  class PLAN,DESIGN,BUILD,TEST,REVIEW,DOCUMENT,DEPLOY phase;

@@ -29,6 +29,8 @@
 |   `-- package.json
 |-- docs/
 |   |-- SPEC.md
+|   |-- articles/
+|   |   `-- ai-native-sdlc-case-study.md
 |   |-- architecture/
 |   |   |-- ARCHITECTURE.md
 |   |   |-- adr/
