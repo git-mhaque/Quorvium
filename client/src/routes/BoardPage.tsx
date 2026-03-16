@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { BoardCanvas } from '../components/BoardCanvas';
+import { NOTE_COLORS, NOTE_MIN_HEIGHT, NOTE_WIDTH } from '../components/boardCanvas.constants';
 import { fetchBoard, renameBoard } from '../lib/api';
-import { buildBoardUrl } from '../lib/boardUrl';
-import { copyTextToClipboard } from '../lib/clipboard';
 import { createBoardSocket } from '../lib/socket';
 import type { BoardSocket } from '../lib/socket';
 import { useAuth } from '../state/auth';
@@ -21,16 +20,14 @@ export function BoardPage() {
   const [isEditingBoardName, setIsEditingBoardName] = useState(false);
   const [boardNameDraft, setBoardNameDraft] = useState('');
   const [isSavingBoardName, setIsSavingBoardName] = useState(false);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
   const socketRef = useRef<BoardSocket>(createBoardSocket());
   const boardNameInputRef = useRef<HTMLInputElement>(null);
+  const overlayPanelRef = useRef<HTMLElement>(null);
+  const autoFitBoardIdRef = useRef<string | null>(null);
+  const shouldAutoFitFromSocketRef = useRef(false);
   const [isConnected, setIsConnected] = useState(false);
-
-  const shareUrl = useMemo(() => {
-    if (!boardId) {
-      return '';
-    }
-    return buildBoardUrl(boardId);
-  }, [boardId]);
 
   const isBoardCreator = Boolean(user && board && board.owner?.id === user.id);
 
@@ -86,6 +83,7 @@ export function BoardPage() {
     const socket = socketRef.current;
 
     const handleBoardState = ({ board: nextBoard }: { board: Board }) => {
+      shouldAutoFitFromSocketRef.current = true;
       setBoard(nextBoard);
     };
 
@@ -189,6 +187,22 @@ export function BoardPage() {
       socketRef.current = createBoardSocket();
     };
   }, [boardId, user]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+    document.body.classList.add('board-page-body');
+    return () => {
+      document.body.classList.remove('board-page-body');
+    };
+  }, []);
+
+  useEffect(() => {
+    setScale(1);
+    setOffset({ x: 0, y: 0 });
+    shouldAutoFitFromSocketRef.current = false;
+  }, [boardId]);
 
   const startBoardNameEditing = () => {
     if (!board || !isBoardCreator) {
@@ -357,6 +371,72 @@ export function BoardPage() {
     );
   };
 
+  const resetView = useCallback(() => {
+    if (typeof window === 'undefined' || !board) {
+      return;
+    }
+
+    const notes = Object.values(board.notes);
+    if (notes.length === 0) {
+      setScale(1);
+      setOffset({ x: 0, y: 0 });
+      return;
+    }
+
+    const margin = 120;
+    const minX = Math.min(...notes.map((note) => note.x));
+    const minY = Math.min(...notes.map((note) => note.y));
+    const maxX = Math.max(...notes.map((note) => note.x + NOTE_WIDTH));
+    const maxY = Math.max(...notes.map((note) => note.y + NOTE_MIN_HEIGHT));
+    const contentWidth = Math.max(1, maxX - minX);
+    const contentHeight = Math.max(1, maxY - minY);
+
+    const overlayHeight = overlayPanelRef.current?.getBoundingClientRect().height ?? 0;
+    const viewportX = 16;
+    const viewportY = Math.ceil(overlayHeight + 24);
+    const viewportWidth = Math.max(240, window.innerWidth - viewportX * 2);
+    const viewportHeight = Math.max(180, window.innerHeight - viewportY - 24);
+
+    const fitScale = Math.min(
+      viewportWidth / (contentWidth + margin * 2),
+      viewportHeight / (contentHeight + margin * 2)
+    );
+    const nextScale = Math.max(0.5, Math.min(2, fitScale));
+    const contentPixelWidth = (contentWidth + margin * 2) * nextScale;
+    const contentPixelHeight = (contentHeight + margin * 2) * nextScale;
+    const extraX = Math.max(0, (viewportWidth - contentPixelWidth) / 2);
+    const extraY = Math.max(0, (viewportHeight - contentPixelHeight) / 2);
+
+    setScale(nextScale);
+    setOffset({
+      x: viewportX + extraX - (minX - margin) * nextScale,
+      y: viewportY + extraY - (minY - margin) * nextScale
+    });
+  }, [board]);
+
+  useEffect(() => {
+    if (!board) {
+      return;
+    }
+    if (autoFitBoardIdRef.current === board.id) {
+      return;
+    }
+    autoFitBoardIdRef.current = board.id;
+    requestAnimationFrame(() => {
+      resetView();
+    });
+  }, [board, resetView]);
+
+  useEffect(() => {
+    if (!board || !shouldAutoFitFromSocketRef.current) {
+      return;
+    }
+    shouldAutoFitFromSocketRef.current = false;
+    requestAnimationFrame(() => {
+      resetView();
+    });
+  }, [board, resetView]);
+
   if (fatalError) {
     return (
       <div
@@ -395,123 +475,193 @@ export function BoardPage() {
   return (
     <div
       style={{
-        minHeight: '100vh',
-        padding: '1.5rem 2rem',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '1rem',
-        position: 'relative'
+        position: 'relative',
+        width: '100%',
+        height: '100dvh',
+        overflow: 'hidden'
       }}
     >
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
-            {isEditingBoardName ? (
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void submitBoardName();
-                }}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}
-              >
-                <input
-                  ref={boardNameInputRef}
-                  className="input"
-                  aria-label="Board name"
-                  value={boardNameDraft}
-                  maxLength={80}
-                  disabled={isSavingBoardName}
-                  onChange={(event) => setBoardNameDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape') {
-                      event.preventDefault();
-                      cancelBoardNameEditing();
-                    }
+      <BoardCanvas
+        board={board}
+        onUpdateNote={handleUpdateNote}
+        onDeleteNote={handleDeleteNote}
+        scale={scale}
+        offset={offset}
+        onOffsetChange={setOffset}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 40,
+          pointerEvents: 'none'
+        }}
+      >
+        <section
+          ref={overlayPanelRef}
+          className="card"
+          style={{
+            pointerEvents: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.8rem',
+            width: '100%',
+            boxSizing: 'border-box',
+            borderRadius: 0,
+            borderLeft: 'none',
+            borderRight: 'none'
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '0.75rem',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+              {isEditingBoardName ? (
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void submitBoardName();
                   }}
-                  style={{
-                    width: 'min(28rem, 75vw)',
-                    fontSize: '1.1rem',
-                    fontWeight: 600,
-                    padding: '0.45rem 0.65rem'
-                  }}
-                />
-                <button className="btn btn-secondary" type="submit" disabled={isSavingBoardName}>
-                  {isSavingBoardName ? 'Saving…' : 'Save'}
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  type="button"
-                  disabled={isSavingBoardName}
-                  onClick={cancelBoardNameEditing}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}
                 >
-                  Cancel
-                </button>
-              </form>
-            ) : (
-              <>
-                <h1 style={{ margin: 0, fontSize: '1.9rem' }}>{board.name}</h1>
-                {isBoardCreator && (
+                  <input
+                    ref={boardNameInputRef}
+                    className="input"
+                    aria-label="Board name"
+                    value={boardNameDraft}
+                    maxLength={80}
+                    disabled={isSavingBoardName}
+                    onChange={(event) => setBoardNameDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        cancelBoardNameEditing();
+                      }
+                    }}
+                    style={{
+                      width: 'min(28rem, 60vw)',
+                      fontSize: '1.1rem',
+                      fontWeight: 600,
+                      padding: '0.45rem 0.65rem'
+                    }}
+                  />
+                  <button className="btn btn-secondary" type="submit" disabled={isSavingBoardName}>
+                    {isSavingBoardName ? 'Saving…' : 'Save'}
+                  </button>
                   <button
                     className="btn btn-secondary"
                     type="button"
-                    aria-label="Rename board"
-                    title="Rename board"
-                    onClick={startBoardNameEditing}
-                    style={{ padding: '0.35rem 0.55rem', minWidth: 'auto' }}
+                    disabled={isSavingBoardName}
+                    onClick={cancelBoardNameEditing}
                   >
-                    <svg
-                      aria-hidden="true"
-                      viewBox="0 0 24 24"
-                      width="16"
-                      height="16"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <path d="M12 20h9" />
-                      <path d="m16.5 3.5 4 4L7 21H3v-4z" />
-                    </svg>
+                    Cancel
                   </button>
-                )}
-              </>
-            )}
-          </div>
-          <p style={{ margin: '0.35rem 0', color: 'rgba(226,232,240,0.75)', fontSize: '0.95rem' }}>
-            Share this link with your team: <code>{shareUrl}</code>
-          </p>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            <button
-              className="btn btn-secondary"
-              type="button"
-              onClick={() => {
-                void copyTextToClipboard(shareUrl)
-                  .then(() => setFeedback(null))
-                  .catch(() => setFeedback('Unable to copy link to clipboard.'));
-              }}
-            >
-              Copy link
+                </form>
+              ) : (
+                <>
+                  <h1 style={{ margin: 0, fontSize: '1.8rem' }}>{board.name}</h1>
+                  {isBoardCreator && (
+                    <button
+                      className="btn btn-secondary"
+                      type="button"
+                      aria-label="Rename board"
+                      title="Rename board"
+                      onClick={startBoardNameEditing}
+                      style={{ padding: '0.35rem 0.55rem', minWidth: 'auto' }}
+                    >
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M12 20h9" />
+                        <path d="m16.5 3.5 4 4L7 21H3v-4z" />
+                      </svg>
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            <button className="btn btn-secondary" onClick={() => navigate('/')}>
+              Home
             </button>
-            <span style={{ fontSize: '0.85rem', color: 'rgba(148,163,184,0.9)' }}>
-              {isConnected ? 'Connected' : 'Connecting…'} · {participants} active collaborator
-              {participants > 1 ? 's' : ''}
-            </span>
           </div>
-        </div>
-        <button className="btn btn-secondary" onClick={() => navigate('/')}>
-          Home
-        </button>
-      </header>
 
-      <main style={{ flex: 1 }}>
-        <BoardCanvas
-          board={board}
-          onCreateNote={handleCreateNote}
-          onUpdateNote={handleUpdateNote}
-          onDeleteNote={handleDeleteNote}
-        />
-      </main>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '0.75rem',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button className="btn btn-primary" type="button" onClick={() => handleCreateNote()}>
+                Add sticky note
+              </button>
+              <div style={{ display: 'flex', gap: '0.4rem' }}>
+                {NOTE_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => handleCreateNote({ color })}
+                    type="button"
+                    title="Create note with color"
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '999px',
+                      border: '2px solid rgba(15, 23, 42, 0.4)',
+                      backgroundColor: color,
+                      cursor: 'pointer'
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                Zoom
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2"
+                  step="0.1"
+                  value={scale}
+                  onChange={(event) => setScale(Number(event.target.value))}
+                />
+                <span style={{ minWidth: 48, textAlign: 'right' }}>{Math.round(scale * 100)}%</span>
+              </label>
+              <button
+                className="btn btn-secondary"
+                type="button"
+                onClick={resetView}
+              >
+                Reset view
+              </button>
+              <span style={{ fontSize: '0.85rem', color: 'rgba(148,163,184,0.9)' }}>
+                {isConnected ? 'Connected' : 'Connecting…'} · {participants} active collaborator
+                {participants > 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+        </section>
+      </div>
       {feedback && (
         <div
           style={{

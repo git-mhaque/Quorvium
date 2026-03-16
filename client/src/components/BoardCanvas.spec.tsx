@@ -1,7 +1,8 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BoardCanvas, sanitizeNotePosition } from './BoardCanvas';
+import { BoardCanvas } from './BoardCanvas';
+import { sanitizeNotePosition } from './boardCanvas.utils';
 
 const board = {
   id: 'board-1',
@@ -62,14 +63,12 @@ describe('BoardCanvas drag interactions', () => {
   });
 
   it('does not crash on rapid pointer move/up while dragging a note', () => {
-    const onCreateNote = vi.fn();
     const onUpdateNote = vi.fn();
     const onDeleteNote = vi.fn();
 
     render(
       <BoardCanvas
         board={board}
-        onCreateNote={onCreateNote}
         onUpdateNote={onUpdateNote}
         onDeleteNote={onDeleteNote}
       />
@@ -97,7 +96,7 @@ describe('BoardCanvas drag interactions', () => {
 
   it('allows unbounded positive coordinates and rejects invalid values', () => {
     expect(sanitizeNotePosition(50000, 50000)).toEqual({ x: 50000, y: 50000 });
-    expect(sanitizeNotePosition(-200, -300)).toEqual({ x: 0, y: 0 });
+    expect(sanitizeNotePosition(-200, -300)).toEqual({ x: -200, y: -300 });
     expect(sanitizeNotePosition(Number.NaN, 10)).toBeNull();
     expect(sanitizeNotePosition(10, Number.POSITIVE_INFINITY)).toBeNull();
   });
