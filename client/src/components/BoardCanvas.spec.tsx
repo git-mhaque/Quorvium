@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { BoardCanvas } from './BoardCanvas';
@@ -92,6 +92,127 @@ describe('BoardCanvas drag interactions', () => {
         y: expect.any(Number)
       })
     );
+  });
+
+  it('supports panning the canvas from background and updates external offset', () => {
+    const onUpdateNote = vi.fn();
+    const onDeleteNote = vi.fn();
+    const onOffsetChange = vi.fn();
+
+    const { container } = render(
+      <BoardCanvas
+        board={board}
+        onUpdateNote={onUpdateNote}
+        onDeleteNote={onDeleteNote}
+        offset={{ x: 10, y: 20 }}
+        onOffsetChange={onOffsetChange}
+      />
+    );
+
+    const canvas = container.firstElementChild as HTMLDivElement;
+
+    fireEvent.pointerDown(canvas, {
+      pointerId: 8,
+      clientX: 100,
+      clientY: 120
+    });
+    fireEvent.pointerMove(canvas, {
+      pointerId: 8,
+      clientX: 140,
+      clientY: 165
+    });
+    fireEvent.pointerUp(canvas, {
+      pointerId: 8,
+      clientX: 140,
+      clientY: 165
+    });
+
+    expect(onOffsetChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start panning when pointer down starts on a note card', () => {
+    const onOffsetChange = vi.fn();
+
+    const { container } = render(
+      <BoardCanvas
+        board={board}
+        onUpdateNote={vi.fn()}
+        onDeleteNote={vi.fn()}
+        offset={{ x: 0, y: 0 }}
+        onOffsetChange={onOffsetChange}
+      />
+    );
+
+    const noteCard = container.querySelector('[data-note-card="true"]') as HTMLDivElement;
+    fireEvent.pointerDown(noteCard, {
+      pointerId: 3,
+      clientX: 200,
+      clientY: 220
+    });
+    fireEvent.pointerMove(container.firstElementChild as Element, {
+      pointerId: 3,
+      clientX: 250,
+      clientY: 260
+    });
+
+    expect(onOffsetChange).not.toHaveBeenCalled();
+  });
+
+  it('supports note delete, color change, and body update paths', () => {
+    const onUpdateNote = vi.fn();
+    const onDeleteNote = vi.fn();
+
+    const { container } = render(
+      <BoardCanvas
+        board={board}
+        onUpdateNote={onUpdateNote}
+        onDeleteNote={onDeleteNote}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '×' }));
+    expect(onDeleteNote).toHaveBeenCalledWith('note-1');
+
+    const noteCard = container.querySelector('[data-note-card="true"]') as HTMLElement;
+    const noteButtons = within(noteCard).getAllByRole('button');
+    fireEvent.click(noteButtons[1]);
+    expect(onUpdateNote).toHaveBeenCalledWith(
+      'note-1',
+      expect.objectContaining({
+        color: expect.any(String)
+      })
+    );
+
+    const input = screen.getByPlaceholderText('Add your idea…');
+    fireEvent.change(input, { target: { value: '  Updated body  ' } });
+    fireEvent.blur(input);
+    expect(onUpdateNote).toHaveBeenCalledWith('note-1', { body: 'Updated body' });
+
+    fireEvent.change(input, { target: { value: '   ' } });
+    fireEvent.blur(input);
+    expect(onUpdateNote).toHaveBeenCalledWith('note-1', { body: 'New idea' });
+  });
+
+  it('ignores move/up before drag and finalizes drag on pointer cancel', () => {
+    const onUpdateNote = vi.fn();
+
+    render(
+      <BoardCanvas
+        board={board}
+        onUpdateNote={onUpdateNote}
+        onDeleteNote={vi.fn()}
+      />
+    );
+
+    const handle = screen.getByText('Sticky').closest('div') as HTMLDivElement;
+    fireEvent.pointerMove(handle, { clientX: 5, clientY: 5 });
+    fireEvent.pointerUp(handle, { clientX: 5, clientY: 5 });
+    expect(onUpdateNote).not.toHaveBeenCalled();
+
+    fireEvent.pointerDown(handle, { clientX: 100, clientY: 120 });
+    fireEvent.pointerMove(handle, { clientX: 140, clientY: 160 });
+    fireEvent.pointerCancel(handle, { clientX: 140, clientY: 160 });
+    expect(onUpdateNote).toHaveBeenCalledTimes(1);
   });
 
   it('allows unbounded positive coordinates and rejects invalid values', () => {

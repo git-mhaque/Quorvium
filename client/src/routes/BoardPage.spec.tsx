@@ -1,0 +1,483 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const apiMocks = vi.hoisted(() => ({
+  fetchBoard: vi.fn(),
+  renameBoard: vi.fn()
+}));
+
+const authState = vi.hoisted(() => ({
+  user: {
+    id: 'owner-1',
+    name: 'Owner User',
+    email: 'owner@example.com',
+    isGuest: false
+  }
+}));
+
+const socketState = vi.hoisted(() => {
+  type Handler = (...args: unknown[]) => void;
+  type HandlerMap = Map<string, Set<Handler>>;
+  interface AckResponse {
+    ok: boolean;
+    error?: string;
+  }
+  interface MockSocket {
+    emitted: Array<{ event: string; payload: unknown }>;
+    on: (event: string, handler: Handler) => MockSocket;
+    off: (event: string, handler: Handler) => MockSocket;
+    removeAllListeners: () => MockSocket;
+    connect: () => MockSocket;
+    disconnect: () => MockSocket;
+    emit: (
+      event: string,
+      payload: unknown,
+      ack?: (response: { ok: boolean; error?: string }) => void
+    ) => MockSocket;
+    dispatch: (event: string, payload?: unknown) => void;
+    setAck: (event: string, response: AckResponse) => void;
+  }
+
+  const sockets: MockSocket[] = [];
+  const defaultAckByEvent = new Map<string, AckResponse>();
+
+  function createSocket() {
+    const handlers: HandlerMap = new Map();
+    const ackByEvent = new Map<string, AckResponse>();
+
+    const dispatch = (event: string, payload?: unknown) => {
+      const listeners = handlers.get(event);
+      if (!listeners) {
+        return;
+      }
+      for (const listener of listeners) {
+        listener(payload as never);
+      }
+    };
+
+    const socket = {
+      emitted: [] as Array<{ event: string; payload: unknown }>,
+      on(event: string, handler: Handler) {
+        const existing = handlers.get(event) ?? new Set<Handler>();
+        existing.add(handler);
+        handlers.set(event, existing);
+        return socket;
+      },
+      off(event: string, handler: Handler) {
+        handlers.get(event)?.delete(handler);
+        return socket;
+      },
+      removeAllListeners() {
+        handlers.clear();
+        return socket;
+      },
+      connect() {
+        dispatch('connect');
+        return socket;
+      },
+      disconnect() {
+        dispatch('disconnect');
+        return socket;
+      },
+      emit(event: string, payload: unknown, ack?: (response: { ok: boolean; error?: string }) => void) {
+        socket.emitted.push({ event, payload });
+        ack?.(ackByEvent.get(event) ?? defaultAckByEvent.get(event) ?? { ok: true });
+        return socket;
+      },
+      dispatch,
+      setAck(event: string, response: AckResponse) {
+        ackByEvent.set(event, response);
+      }
+    };
+
+    sockets.push(socket);
+    return socket;
+  }
+
+  return {
+    createBoardSocket: vi.fn(createSocket),
+    sockets,
+    setDefaultAck(event: string, response: AckResponse) {
+      defaultAckByEvent.set(event, response);
+    },
+    clearDefaultAcks() {
+      defaultAckByEvent.clear();
+    }
+  };
+});
+
+vi.mock('../lib/api', () => ({
+  __esModule: true,
+  fetchBoard: apiMocks.fetchBoard,
+  renameBoard: apiMocks.renameBoard
+}));
+
+vi.mock('../lib/socket', () => ({
+  __esModule: true,
+  createBoardSocket: socketState.createBoardSocket
+}));
+
+vi.mock('../state/auth', () => ({
+  __esModule: true,
+  useAuth: () => authState
+}));
+
+import { BoardPage } from './BoardPage';
+
+function renderBoard(path = '/boards/11111111-1111-1111-1111-111111111111') {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/boards/:boardId" element={<BoardPage />} />
+        <Route path="/" element={<div>Home</div>} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+
+function getActiveSocket() {
+  const joined =
+    socketState.sockets.find((candidate) =>
+      candidate.emitted.some((entry: { event: string }) => entry.event === 'board:join')
+    ) ?? socketState.sockets[0];
+  return joined;
+}
+
+const baseBoard = {
+  id: '11111111-1111-1111-1111-111111111111',
+  name: 'Roadmap',
+  owner: {
+    id: 'owner-1',
+    name: 'Owner User'
+  },
+  createdAt: '2026-03-10T12:00:00.000Z',
+  updatedAt: '2026-03-10T12:00:00.000Z',
+  notes: {
+    'note-1': {
+      id: 'note-1',
+      body: 'North star',
+      color: '#fde68a',
+      x: 100,
+      y: 100,
+      createdAt: '2026-03-10T12:00:00.000Z',
+      updatedAt: '2026-03-10T12:00:00.000Z'
+    }
+  }
+};
+
+describe('BoardPage', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+    socketState.sockets.length = 0;
+    socketState.clearDefaultAcks();
+    vi.useRealTimers();
+    authState.user = {
+      id: 'owner-1',
+      name: 'Owner User',
+      email: 'owner@example.com',
+      isGuest: false
+    };
+  });
+
+  it('loads board, joins socket, and auto-fits to show all cards', async () => {
+    apiMocks.fetchBoard.mockResolvedValue({
+      ...baseBoard,
+      notes: {
+        ...baseBoard.notes,
+        'note-2': {
+          id: 'note-2',
+          body: 'Far note',
+          color: '#bfdbfe',
+          x: 12000,
+          y: 12000,
+          createdAt: '2026-03-10T12:00:00.000Z',
+          updatedAt: '2026-03-10T12:00:00.000Z'
+        }
+      }
+    });
+
+    renderBoard();
+
+    await screen.findByRole('heading', { name: 'Roadmap' });
+
+    await waitFor(() => {
+      expect(screen.getByText('50%')).toBeInTheDocument();
+    });
+
+    const socket = socketState.sockets[0];
+    expect(socket).toBeDefined();
+    expect(socket.emitted).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: 'board:join',
+          payload: expect.objectContaining({
+            boardId: '11111111-1111-1111-1111-111111111111'
+          })
+        })
+      ])
+    );
+  });
+
+  it('redirects to home when board id param is missing', async () => {
+    render(
+      <MemoryRouter initialEntries={['/boards']}>
+        <Routes>
+          <Route path="/boards" element={<BoardPage />} />
+          <Route path="/" element={<div>Home</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await screen.findByText('Home');
+    expect(apiMocks.fetchBoard).not.toHaveBeenCalled();
+    expect(socketState.sockets[0].emitted).toEqual([]);
+  });
+
+  it('creates note via socket and allows creator to rename board', async () => {
+    apiMocks.fetchBoard.mockResolvedValue(baseBoard);
+    apiMocks.renameBoard.mockResolvedValue({
+      ...baseBoard,
+      name: 'Roadmap Q2'
+    });
+
+    renderBoard();
+
+    await screen.findByRole('heading', { name: 'Roadmap' });
+
+    await userEvent.click(screen.getByRole('button', { name: /add sticky note/i }));
+
+    const socket = getActiveSocket();
+    await waitFor(() => {
+      expect(socket.emitted).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            event: 'note:create',
+            payload: expect.objectContaining({
+              boardId: baseBoard.id
+            })
+          })
+        ])
+      );
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /rename board/i }));
+    const input = screen.getByRole('textbox', { name: /board name/i });
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Roadmap Q2');
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(apiMocks.renameBoard).toHaveBeenCalledWith(baseBoard.id, {
+        name: 'Roadmap Q2',
+        requesterId: 'owner-1'
+      });
+    });
+
+    await screen.findByRole('heading', { name: 'Roadmap Q2' });
+  });
+
+  it('handles rename validation, escape cancel, and server error feedback', async () => {
+    apiMocks.fetchBoard.mockResolvedValue(baseBoard);
+    apiMocks.renameBoard.mockRejectedValue({
+      response: {
+        data: {
+          error: 'Only owner can rename'
+        }
+      }
+    });
+
+    renderBoard();
+    await screen.findByRole('heading', { name: 'Roadmap' });
+
+    await userEvent.click(screen.getByRole('button', { name: /rename board/i }));
+    const input = screen.getByRole('textbox', { name: /board name/i });
+    await userEvent.clear(input);
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    expect(await screen.findByText('Board name cannot be empty.')).toBeInTheDocument();
+
+    await userEvent.type(input, 'Roadmap');
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    expect(apiMocks.renameBoard).not.toHaveBeenCalled();
+    expect(screen.queryByRole('textbox', { name: /board name/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /rename board/i }));
+    const inputAgain = screen.getByRole('textbox', { name: /board name/i });
+    await userEvent.type(inputAgain, '{Escape}');
+    expect(screen.queryByRole('textbox', { name: /board name/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /rename board/i }));
+    const retryInput = screen.getByRole('textbox', { name: /board name/i });
+    await userEvent.clear(retryInput);
+    await userEvent.type(retryInput, 'Roadmap Final');
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(await screen.findByText('Only owner can rename')).toBeInTheDocument();
+  });
+
+  it('does not show rename action for non-creator users', async () => {
+    authState.user = {
+      id: 'viewer-1',
+      name: 'Viewer User',
+      email: 'viewer@example.com',
+      isGuest: false
+    };
+    apiMocks.fetchBoard.mockResolvedValue(baseBoard);
+
+    renderBoard();
+
+    await screen.findByRole('heading', { name: 'Roadmap' });
+    expect(screen.queryByRole('button', { name: /rename board/i })).not.toBeInTheDocument();
+  });
+
+  it('applies socket state and note lifecycle events', async () => {
+    apiMocks.fetchBoard.mockResolvedValue(baseBoard);
+    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    renderBoard();
+    await screen.findByRole('heading', { name: 'Roadmap' });
+
+    const socket = getActiveSocket();
+
+    act(() => {
+      socket.dispatch('board:state', {
+        board: {
+          ...baseBoard,
+          name: 'Roadmap Live',
+          notes: {}
+        }
+      });
+    });
+    await screen.findByRole('heading', { name: 'Roadmap Live' });
+
+    const created = {
+      id: 'note-2',
+      body: 'New from socket',
+      color: '#bfdbfe',
+      x: 300,
+      y: 240,
+      createdAt: '2026-03-10T12:00:00.000Z',
+      updatedAt: '2026-03-10T12:00:00.000Z'
+    };
+
+    act(() => {
+      socket.dispatch('note:created', { boardId: baseBoard.id, note: created });
+    });
+    await screen.findByText('New from socket');
+
+    act(() => {
+      socket.dispatch('note:updated', {
+        boardId: baseBoard.id,
+        note: {
+          ...created,
+          body: 'Updated by socket'
+        }
+      });
+    });
+    await screen.findByText('Updated by socket');
+
+    act(() => {
+      socket.dispatch('note:deleted', { boardId: baseBoard.id, noteId: 'note-2' });
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Updated by socket')).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/1 active collaborator/i)).toBeInTheDocument();
+    act(() => {
+      socket.dispatch('board:user_joined', {
+        boardId: baseBoard.id,
+        user: { id: 'guest-2', name: 'Guest 2', isGuest: true },
+        joinedAt: '2026-03-10T12:00:00.000Z'
+      });
+    });
+    expect(screen.getByText(/2 active collaborators/i)).toBeInTheDocument();
+
+    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 30000);
+  });
+
+  it('shows operation errors for create update and delete note actions', async () => {
+    apiMocks.fetchBoard.mockResolvedValue(baseBoard);
+
+    renderBoard();
+    await screen.findByRole('heading', { name: 'Roadmap' });
+
+    const socket = getActiveSocket();
+    socket.setAck('note:create', { ok: false, error: 'Create failed' });
+    await userEvent.click(screen.getByRole('button', { name: /add sticky note/i }));
+    expect(await screen.findByText('Create failed')).toBeInTheDocument();
+
+    socket.setAck('note:update', { ok: false, error: 'Update failed' });
+    const textArea = screen.getByDisplayValue('North star');
+    fireEvent.change(textArea, { target: { value: 'North star revised' } });
+    fireEvent.blur(textArea);
+    expect(await screen.findByText('Update failed')).toBeInTheDocument();
+
+    socket.setAck('note:delete', { ok: false, error: 'Delete failed' });
+    await userEvent.click(screen.getByRole('button', { name: /×/i }));
+    expect(await screen.findByText('Delete failed')).toBeInTheDocument();
+  });
+
+  it('updates connection badge and resets empty-board zoom to 100%', async () => {
+    apiMocks.fetchBoard.mockResolvedValue({
+      ...baseBoard,
+      notes: {}
+    });
+
+    renderBoard();
+    await screen.findByRole('heading', { name: 'Roadmap' });
+
+    const socket = getActiveSocket();
+    expect(screen.getByText(/connected/i)).toBeInTheDocument();
+
+    act(() => {
+      socket.dispatch('disconnect');
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/connecting/i)).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByRole('slider'), {
+      target: { value: '1.7' }
+    });
+    expect(screen.getByText('170%')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /reset view/i }));
+    expect(screen.getByText('100%')).toBeInTheDocument();
+
+    act(() => {
+      socket.dispatch('connect');
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/connected/i)).toBeInTheDocument();
+    });
+  });
+
+  it('shows join failure message when socket join is rejected', async () => {
+    apiMocks.fetchBoard.mockResolvedValue(baseBoard);
+    socketState.setDefaultAck('board:join', { ok: false, error: 'Join denied' });
+
+    renderBoard();
+    expect(await screen.findByText('Join denied')).toBeInTheDocument();
+  });
+
+  it('shows generic message when board fetch fails with non-http error', async () => {
+    apiMocks.fetchBoard.mockRejectedValue(new Error('network'));
+
+    renderBoard();
+    expect(await screen.findByText('Failed to load board.')).toBeInTheDocument();
+  });
+
+  it('shows not found message when board fetch fails', async () => {
+    const notFoundError = Object.assign(new Error('not found'), {
+      response: { status: 404 }
+    });
+    apiMocks.fetchBoard.mockRejectedValue(notFoundError);
+
+    renderBoard();
+
+    expect(await screen.findByText('Board not found.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /go back home/i })).toBeInTheDocument();
+  });
+});
