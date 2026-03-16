@@ -1,6 +1,6 @@
 # Quorvium
+Quorvium is a collaboration app where teams can brainstorm ideas together in real time. 
 
-Quorvium is a real-time collaboration board where teams gather a quorum of ideas, scribble sticky notes, and brainstorm together.
 
 ## Requirements
 
@@ -73,10 +73,14 @@ The exchange of Google authorization codes happens in `server/src/routes/auth.ts
 
 ## Project structure
 
-- `client/` – React UI, Google auth, board canvas, Socket.IO client
-- `server/` – Express API, Google token verification, Socket.IO hub
+- `client/` – React + Vite frontend (Google sign-in UI, board canvas, Socket.IO client)
+- `server/` – Express + Socket.IO backend (auth callback, board APIs, real-time hub)
+- `infra/` – Infrastructure provisioning code (Cloud Run, Firestore, IAM, secrets, services)
+- `.github/workflows/` – CI/CD workflows 
 - `docs/SPEC.md` – Canonical product requirements
+- `docs/architecture/ARCHITECTURE.md` – System architecture, deployment topology, and promotion flow
+- `docs/backlog/` – Feature and technical backlog trackers
+- `docs/operations/` – Operations guides, secrets/runbook docs, and setup steps
+- `docs/plans/PRODUCTION_READINESS_PLAN.md` – Production readiness plan
 - `docs/articles/` – Long-form engineering/product writeups
-- `docs/architecture/ARCHITECTURE.md` – System architecture and runtime topology
-- `docs/` – Supporting documentation (operations, plans, and runbooks)
 - `AGENTS.md` – Contributor workflow guide
