@@ -60,6 +60,7 @@ export function BoardPage() {
   const [isEditingBoardName, setIsEditingBoardName] = useState(false);
   const [boardNameDraft, setBoardNameDraft] = useState('');
   const [isSavingBoardName, setIsSavingBoardName] = useState(false);
+  const [isBoardTitleActionsVisible, setIsBoardTitleActionsVisible] = useState(false);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [paletteDrag, setPaletteDrag] = useState<{ pointerId: number; color: string } | null>(null);
@@ -748,9 +749,10 @@ export function BoardPage() {
             width: 'min(34rem, calc(100vw - 2rem))',
             maxWidth: 'calc(100vw - 2rem)',
             boxSizing: 'border-box',
-            padding: '0.55rem 0.7rem',
+            padding: '0.4rem 0.6rem',
             background: 'rgba(248,250,252,0.95)',
             border: '1px solid rgba(148,163,184,0.45)',
+            borderRadius: 10,
             boxShadow: '0 14px 32px rgba(148,163,184,0.35)',
             backdropFilter: 'blur(8px)'
           }}
@@ -759,8 +761,8 @@ export function BoardPage() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '0.5rem',
-              minHeight: 34
+              gap: '0.45rem',
+              minHeight: 30
             }}
           >
             <button
@@ -772,9 +774,9 @@ export function BoardPage() {
                 background: '#ffffff',
                 color: '#334155',
                 borderRadius: 8,
-                width: 32,
-                height: 32,
-                minWidth: 32,
+                width: 28,
+                height: 28,
+                minWidth: 28,
                 padding: 0,
                 display: 'grid',
                 placeItems: 'center',
@@ -784,8 +786,8 @@ export function BoardPage() {
               <svg
                 aria-hidden="true"
                 viewBox="0 0 24 24"
-                width="15"
-                height="15"
+                width="13"
+                height="13"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
@@ -796,7 +798,23 @@ export function BoardPage() {
                 <path d="M5 9.5V20h14V9.5" />
               </svg>
             </button>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: 0, flex: 1 }}>
+            <div
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0, flex: 1 }}
+              onMouseEnter={isBoardCreator ? () => setIsBoardTitleActionsVisible(true) : undefined}
+              onMouseLeave={isBoardCreator ? () => setIsBoardTitleActionsVisible(false) : undefined}
+              onFocusCapture={isBoardCreator ? () => setIsBoardTitleActionsVisible(true) : undefined}
+              onBlurCapture={
+                isBoardCreator
+                  ? (event) => {
+                      const nextFocused = event.relatedTarget as Node | null;
+                      if (nextFocused && event.currentTarget.contains(nextFocused)) {
+                        return;
+                      }
+                      setIsBoardTitleActionsVisible(false);
+                    }
+                  : undefined
+              }
+            >
               {isEditingBoardName ? (
                 <input
                   ref={boardNameInputRef}
@@ -810,9 +828,9 @@ export function BoardPage() {
                   style={{
                     width: '100%',
                     maxWidth: '100%',
-                    fontSize: '1.15rem',
-                    fontWeight: 600,
-                    lineHeight: 1.2,
+                    fontSize: '1rem',
+                    fontWeight: 500,
+                    lineHeight: 1.15,
                     padding: '0.2rem 0.4rem',
                     borderRadius: 8,
                     border: '1px solid rgba(148,163,184,0.65)',
@@ -824,14 +842,26 @@ export function BoardPage() {
                 <>
                   <h1
                     onClick={isBoardCreator ? startBoardNameEditing : undefined}
+                    onKeyDown={
+                      isBoardCreator
+                        ? (event) => {
+                            if (event.key !== 'Enter' && event.key !== ' ') {
+                              return;
+                            }
+                            event.preventDefault();
+                            startBoardNameEditing();
+                          }
+                        : undefined
+                    }
+                    tabIndex={isBoardCreator ? 0 : undefined}
                     title={isBoardCreator ? 'Click to rename board' : undefined}
                     style={{
                       margin: 0,
-                      fontSize: '1.35rem',
-                      fontWeight: 600,
+                      fontSize: '1.08rem',
+                      fontWeight: 500,
                       letterSpacing: '-0.01em',
                       color: '#0f172a',
-                      lineHeight: 1.2,
+                      lineHeight: 1.15,
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -840,7 +870,7 @@ export function BoardPage() {
                   >
                     {board.name}
                   </h1>
-                  {isBoardCreator && (
+                  {isBoardCreator && isBoardTitleActionsVisible && (
                     <button
                       type="button"
                       aria-label="Rename board"
@@ -851,9 +881,9 @@ export function BoardPage() {
                         background: '#ffffff',
                         color: '#334155',
                         borderRadius: 8,
-                        width: 30,
-                        height: 30,
-                        minWidth: 30,
+                        width: 28,
+                        height: 28,
+                        minWidth: 28,
                         padding: 0,
                         display: 'grid',
                         placeItems: 'center',
@@ -863,8 +893,8 @@ export function BoardPage() {
                       <svg
                         aria-hidden="true"
                         viewBox="0 0 24 24"
-                        width="14"
-                        height="14"
+                        width="13"
+                        height="13"
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"
@@ -942,6 +972,7 @@ export function BoardPage() {
             padding: '0.55rem 0.8rem',
             background: 'rgba(248,250,252,0.95)',
             border: '1px solid rgba(148,163,184,0.45)',
+            borderRadius: 10,
             boxShadow: '0 14px 32px rgba(148,163,184,0.35)',
             backdropFilter: 'blur(8px)'
           }}
