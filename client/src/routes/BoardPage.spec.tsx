@@ -145,6 +145,48 @@ function getActiveSocket() {
   return joined;
 }
 
+async function dragPaletteColorToBoard(clientX = 320, clientY = 220, colorIndex = 0) {
+  const swatches = screen.getAllByRole('button', { name: /drag sticky note color/i });
+  const swatch = swatches[colorIndex];
+  fireEvent.pointerDown(swatch, {
+    pointerId: 27,
+    clientX: 26,
+    clientY: 120,
+    pageX: 26,
+    pageY: 120,
+    screenX: 26,
+    screenY: 120
+  });
+
+  await waitFor(() => {
+    expect(document.body.style.cursor).toBe('copy');
+  });
+
+  fireEvent.pointerUp(window, {
+    pointerId: 27,
+    clientX,
+    clientY,
+    pageX: clientX,
+    pageY: clientY,
+    screenX: clientX,
+    screenY: clientY
+  });
+}
+
+function startPaletteDrag(colorIndex = 0) {
+  const swatches = screen.getAllByRole('button', { name: /drag sticky note color/i });
+  const swatch = swatches[colorIndex];
+  fireEvent.pointerDown(swatch, {
+    pointerId: 27,
+    clientX: 26,
+    clientY: 120,
+    pageX: 26,
+    pageY: 120,
+    screenX: 26,
+    screenY: 120
+  });
+}
+
 const baseBoard = {
   id: '11111111-1111-1111-1111-111111111111',
   name: 'Roadmap',
@@ -246,7 +288,7 @@ describe('BoardPage', () => {
 
     await screen.findByRole('heading', { name: 'Roadmap' });
 
-    await userEvent.click(screen.getByRole('button', { name: /add sticky note/i }));
+    await dragPaletteColorToBoard();
 
     const socket = getActiveSocket();
     await waitFor(() => {
@@ -275,6 +317,31 @@ describe('BoardPage', () => {
     });
 
     await screen.findByRole('heading', { name: 'Roadmap Q2' });
+  });
+
+  it('creates dragged note using the selected color and drop position', async () => {
+    apiMocks.fetchBoard.mockResolvedValue({
+      ...baseBoard,
+      notes: {}
+    });
+
+    renderBoard();
+    await screen.findByRole('heading', { name: 'Roadmap' });
+
+    await dragPaletteColorToBoard(400, 300, 2);
+
+    const socket = getActiveSocket();
+    const createEmit = socket.emitted.find((entry: { event: string }) => entry.event === 'note:create');
+    expect(createEmit).toBeDefined();
+
+    const payload = createEmit?.payload as {
+      boardId: string;
+      note: { color: string; x: number; y: number };
+    };
+    expect(payload.boardId).toBe(baseBoard.id);
+    expect(payload.note.color).toBe('#bfdbfe');
+    expect(Number.isFinite(payload.note.x)).toBe(true);
+    expect(Number.isFinite(payload.note.y)).toBe(true);
   });
 
   it('handles inline rename validation, escape cancel, and server error feedback', async () => {
@@ -407,7 +474,7 @@ describe('BoardPage', () => {
 
     const socket = getActiveSocket();
     socket.setAck('note:create', { ok: false, error: 'Create failed' });
-    await userEvent.click(screen.getByRole('button', { name: /add sticky note/i }));
+    await dragPaletteColorToBoard();
     expect(await screen.findByText('Create failed')).toBeInTheDocument();
 
     socket.setAck('note:update', { ok: false, error: 'Update failed' });
@@ -419,6 +486,26 @@ describe('BoardPage', () => {
     socket.setAck('note:delete', { ok: false, error: 'Delete failed' });
     await userEvent.click(screen.getByRole('button', { name: /×/i }));
     expect(await screen.findByText('Delete failed')).toBeInTheDocument();
+  });
+
+  it('cleans up drag state on pointer cancel without creating a note', async () => {
+    apiMocks.fetchBoard.mockResolvedValue(baseBoard);
+
+    renderBoard();
+    await screen.findByRole('heading', { name: 'Roadmap' });
+
+    startPaletteDrag(3);
+    expect(document.body.style.cursor).toBe('copy');
+
+    fireEvent.pointerCancel(window, {
+      pointerId: 27,
+      clientX: 260,
+      clientY: 180
+    });
+
+    expect(document.body.style.cursor).toBe('');
+    const socket = getActiveSocket();
+    expect(socket.emitted.some((entry: { event: string }) => entry.event === 'note:create')).toBe(false);
   });
 
   it('updates connection badge and resets empty-board zoom to 100%', async () => {

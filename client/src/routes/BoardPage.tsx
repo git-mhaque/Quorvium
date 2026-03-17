@@ -1,4 +1,12 @@
-import { type KeyboardEvent, type WheelEvent, useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState
+} from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { BoardCanvas } from '../components/BoardCanvas';
@@ -17,6 +25,26 @@ function clampZoom(value: number) {
   return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
 }
 
+function firstFiniteNumber(...values: number[]) {
+  return values.find((value) => Number.isFinite(value));
+}
+
+function readPointerPosition(event: {
+  clientX: number;
+  clientY: number;
+  pageX: number;
+  pageY: number;
+  screenX: number;
+  screenY: number;
+}) {
+  const x = firstFiniteNumber(event.clientX, event.pageX, event.screenX);
+  const y = firstFiniteNumber(event.clientY, event.pageY, event.screenY);
+  if (x === undefined || y === undefined) {
+    return null;
+  }
+  return { x, y };
+}
+
 export function BoardPage() {
   const { boardId } = useParams();
   const navigate = useNavigate();
@@ -30,7 +58,11 @@ export function BoardPage() {
   const [isSavingBoardName, setIsSavingBoardName] = useState(false);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [paletteDrag, setPaletteDrag] = useState<{ pointerId: number; color: string } | null>(null);
+  const [paletteDragPointer, setPaletteDragPointer] = useState<{ x: number; y: number } | null>(null);
+  const paletteDragPointerRef = useRef<{ x: number; y: number } | null>(null);
   const socketRef = useRef<BoardSocket>(createBoardSocket());
+  const boardViewportRef = useRef<HTMLDivElement>(null);
   const boardNameInputRef = useRef<HTMLInputElement>(null);
   const overlayPanelRef = useRef<HTMLElement>(null);
   const autoFitBoardIdRef = useRef<string | null>(null);
@@ -279,7 +311,7 @@ export function BoardPage() {
     }
   };
 
-  const handleCreateNote = (noteOverride?: Partial<Pick<StickyNote, 'body' | 'color'>>) => {
+  const handleCreateNote = useCallback((noteOverride?: Partial<Pick<StickyNote, 'body' | 'color' | 'x' | 'y'>>) => {
     if (!socketRef.current || !boardId) {
       return;
     }
@@ -296,8 +328,8 @@ export function BoardPage() {
         note: {
           body,
           color,
-          x: Math.random() * 600 + 200,
-          y: Math.random() * 400 + 100,
+          x: noteOverride?.x ?? Math.random() * 600 + 200,
+          y: noteOverride?.y ?? Math.random() * 400 + 100,
           author: user
             ? {
                 id: user.id,
@@ -315,7 +347,127 @@ export function BoardPage() {
         setFeedback(null);
       }
     );
+  }, [boardId, user]);
+
+  const createNoteFromPaletteDrop = useCallback(
+    (color: string, clientX: number, clientY: number) => {
+      if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+        return;
+      }
+
+      const boardViewport = boardViewportRef.current;
+      if (!boardViewport) {
+        return;
+      }
+
+      const rect = boardViewport.getBoundingClientRect();
+      const effectiveRect =
+        rect.width > 0 && rect.height > 0
+          ? rect
+          : ({
+              left: 0,
+              top: 0,
+              right: window.innerWidth,
+              bottom: window.innerHeight
+            } as Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom'>);
+
+      if (
+        clientX < effectiveRect.left ||
+        clientX > effectiveRect.right ||
+        clientY < effectiveRect.top ||
+        clientY > effectiveRect.bottom
+      ) {
+        return;
+      }
+
+      const x = (clientX - offset.x) / scale - NOTE_WIDTH / 2;
+      const y = (clientY - offset.y) / scale - NOTE_MIN_HEIGHT / 2;
+
+      handleCreateNote({ color, x, y });
+    },
+    [handleCreateNote, offset.x, offset.y, scale]
+  );
+
+  const beginPaletteDrag = (color: string, event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const nextPointer = (() => {
+      const fromEvent = readPointerPosition(event.nativeEvent);
+      if (fromEvent) {
+        return fromEvent;
+      }
+      const rect = event.currentTarget.getBoundingClientRect();
+      const fallbackX = Number.isFinite(rect.left + rect.width / 2) ? rect.left + rect.width / 2 : 0;
+      const fallbackY = Number.isFinite(rect.top + rect.height / 2) ? rect.top + rect.height / 2 : 0;
+      return { x: fallbackX, y: fallbackY };
+    })();
+    setPaletteDrag({ pointerId: event.pointerId, color });
+    paletteDragPointerRef.current = nextPointer;
+    setPaletteDragPointer(nextPointer);
   };
+
+  useEffect(() => {
+    if (!paletteDrag) {
+      return;
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (event.pointerId && event.pointerId !== paletteDrag.pointerId) {
+        return;
+      }
+      const nextPointer = readPointerPosition(event);
+      if (!nextPointer) {
+        return;
+      }
+      paletteDragPointerRef.current = nextPointer;
+      setPaletteDragPointer(nextPointer);
+    };
+
+    const completeDrag = (event: PointerEvent) => {
+      if (event.pointerId && event.pointerId !== paletteDrag.pointerId) {
+        return;
+      }
+
+      if (event.type !== 'pointercancel') {
+        const fallbackPointer = paletteDragPointerRef.current;
+        const pointerFromEvent = readPointerPosition(event);
+        const dropX = pointerFromEvent?.x ?? fallbackPointer?.x;
+        const dropY = pointerFromEvent?.y ?? fallbackPointer?.y;
+        if (dropX !== undefined && dropY !== undefined) {
+          createNoteFromPaletteDrop(paletteDrag.color, dropX, dropY);
+        }
+      }
+      setPaletteDrag(null);
+      setPaletteDragPointer(null);
+      paletteDragPointerRef.current = null;
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', completeDrag);
+    window.addEventListener('pointercancel', completeDrag);
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', completeDrag);
+      window.removeEventListener('pointercancel', completeDrag);
+    };
+  }, [createNoteFromPaletteDrop, paletteDrag]);
+
+  useEffect(() => {
+    if (typeof document === 'undefined' || !paletteDrag) {
+      return;
+    }
+
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = 'copy';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+    };
+  }, [paletteDrag]);
 
   const handleCanvasWheel = useCallback(
     (event: WheelEvent<HTMLDivElement>) => {
@@ -525,6 +677,7 @@ export function BoardPage() {
 
   return (
     <div
+      ref={boardViewportRef}
       style={{
         position: 'relative',
         width: '100%',
@@ -706,45 +859,15 @@ export function BoardPage() {
             flexDirection: 'column',
             gap: '0.5rem',
             alignItems: 'center',
-            padding: '0.55rem',
-            width: 56,
+            padding: '0.45rem 0.3rem',
+            width: 50,
+            borderRadius: 10,
             background: 'rgba(248,250,252,0.95)',
             border: '1px solid rgba(148,163,184,0.45)',
             boxShadow: '0 14px 32px rgba(148,163,184,0.35)',
             backdropFilter: 'blur(8px)'
           }}
         >
-          <button
-            className="btn btn-primary"
-            type="button"
-            aria-label="Add sticky note"
-            title="Add sticky note"
-            onClick={() => handleCreateNote()}
-            style={{
-              minWidth: 'auto',
-              width: 38,
-              height: 38,
-              borderRadius: '999px',
-              padding: 0,
-              display: 'grid',
-              placeItems: 'center'
-            }}
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 24 24"
-              width="18"
-              height="18"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 5v14" />
-              <path d="M5 12h14" />
-            </svg>
-          </button>
           <div
             style={{
               display: 'flex',
@@ -756,16 +879,18 @@ export function BoardPage() {
             {NOTE_COLORS.map((color) => (
               <button
                 key={color}
-                onClick={() => handleCreateNote({ color })}
                 type="button"
-                title="Create note with color"
+                aria-label="Drag sticky note color"
+                title="Drag to create sticky note"
+                onPointerDown={(event) => beginPaletteDrag(color, event)}
                 style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: '999px',
+                  width: 28,
+                  height: 28,
+                  borderRadius: 4,
                   border: '2px solid rgba(15, 23, 42, 0.4)',
                   backgroundColor: color,
-                  cursor: 'pointer'
+                  cursor: 'grab',
+                  touchAction: 'none'
                 }}
               />
             ))}
@@ -836,6 +961,23 @@ export function BoardPage() {
           </button>
         </section>
       </div>
+      {paletteDrag && paletteDragPointer && (
+        <div
+          style={{
+            position: 'fixed',
+            left: paletteDragPointer.x - 11,
+            top: paletteDragPointer.y - 11,
+            width: 22,
+            height: 22,
+            borderRadius: 5,
+            border: '2px solid rgba(15, 23, 42, 0.6)',
+            backgroundColor: paletteDrag.color,
+            boxShadow: '0 10px 20px rgba(15,23,42,0.22)',
+            pointerEvents: 'none',
+            zIndex: 70
+          }}
+        />
+      )}
       {feedback && (
         <div
           style={{
