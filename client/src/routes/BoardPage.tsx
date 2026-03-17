@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { BoardCanvas } from '../components/BoardCanvas';
@@ -216,6 +216,25 @@ export function BoardPage() {
     setBoardNameDraft(board?.name ?? '');
     setIsEditingBoardName(false);
     setIsSavingBoardName(false);
+  };
+
+  const handleBoardNameInputBlur = () => {
+    if (isSavingBoardName) {
+      return;
+    }
+    cancelBoardNameEditing();
+  };
+
+  const handleBoardNameInputKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      void submitBoardName();
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelBoardNameEditing();
+    }
   };
 
   const submitBoardName = async () => {
@@ -507,77 +526,124 @@ export function BoardPage() {
             left: 16,
             width: 'min(34rem, calc(100vw - 2rem))',
             maxWidth: 'calc(100vw - 2rem)',
-            boxSizing: 'border-box'
+            boxSizing: 'border-box',
+            padding: '0.55rem 0.7rem',
+            background: 'rgba(248,250,252,0.95)',
+            border: '1px solid rgba(148,163,184,0.45)',
+            boxShadow: '0 14px 32px rgba(148,163,184,0.35)',
+            backdropFilter: 'blur(8px)'
           }}
         >
           <div
             style={{
               display: 'flex',
-              justifyContent: 'space-between',
               alignItems: 'center',
-              gap: '0.75rem',
-              flexWrap: 'wrap'
+              gap: '0.5rem',
+              minHeight: 34
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              aria-label="Home"
+              onClick={() => navigate('/')}
+              style={{
+                border: '1px solid rgba(148,163,184,0.55)',
+                background: '#ffffff',
+                color: '#334155',
+                borderRadius: 8,
+                width: 32,
+                height: 32,
+                minWidth: 32,
+                padding: 0,
+                display: 'grid',
+                placeItems: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 10.5 12 3l9 7.5" />
+                <path d="M5 9.5V20h14V9.5" />
+              </svg>
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: 0, flex: 1 }}>
               {isEditingBoardName ? (
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void submitBoardName();
+                <input
+                  ref={boardNameInputRef}
+                  aria-label="Board name"
+                  value={boardNameDraft}
+                  maxLength={80}
+                  disabled={isSavingBoardName}
+                  onBlur={handleBoardNameInputBlur}
+                  onChange={(event) => setBoardNameDraft(event.target.value)}
+                  onKeyDown={handleBoardNameInputKeyDown}
+                  style={{
+                    width: '100%',
+                    maxWidth: '100%',
+                    fontSize: '1.15rem',
+                    fontWeight: 600,
+                    lineHeight: 1.2,
+                    padding: '0.2rem 0.4rem',
+                    borderRadius: 8,
+                    border: '1px solid rgba(148,163,184,0.65)',
+                    background: '#ffffff',
+                    color: '#0f172a'
                   }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', flex: 1 }}
-                >
-                  <input
-                    ref={boardNameInputRef}
-                    className="input"
-                    aria-label="Board name"
-                    value={boardNameDraft}
-                    maxLength={80}
-                    disabled={isSavingBoardName}
-                    onChange={(event) => setBoardNameDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Escape') {
-                        event.preventDefault();
-                        cancelBoardNameEditing();
-                      }
-                    }}
-                    style={{
-                      width: 'min(22rem, calc(100vw - 8rem))',
-                      fontSize: '1.1rem',
-                      fontWeight: 600,
-                      padding: '0.45rem 0.65rem'
-                    }}
-                  />
-                  <button className="btn btn-secondary" type="submit" disabled={isSavingBoardName}>
-                    {isSavingBoardName ? 'Saving…' : 'Save'}
-                  </button>
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    disabled={isSavingBoardName}
-                    onClick={cancelBoardNameEditing}
-                  >
-                    Cancel
-                  </button>
-                </form>
+                />
               ) : (
                 <>
-                  <h1 style={{ margin: 0, fontSize: '1.8rem' }}>{board.name}</h1>
+                  <h1
+                    onClick={isBoardCreator ? startBoardNameEditing : undefined}
+                    title={isBoardCreator ? 'Click to rename board' : undefined}
+                    style={{
+                      margin: 0,
+                      fontSize: '1.35rem',
+                      fontWeight: 600,
+                      letterSpacing: '-0.01em',
+                      color: '#0f172a',
+                      lineHeight: 1.2,
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      cursor: isBoardCreator ? 'text' : 'default'
+                    }}
+                  >
+                    {board.name}
+                  </h1>
                   {isBoardCreator && (
                     <button
-                      className="btn btn-secondary"
                       type="button"
                       aria-label="Rename board"
                       title="Rename board"
                       onClick={startBoardNameEditing}
-                      style={{ padding: '0.35rem 0.55rem', minWidth: 'auto' }}
+                      style={{
+                        border: '1px solid rgba(148,163,184,0.55)',
+                        background: '#ffffff',
+                        color: '#334155',
+                        borderRadius: 8,
+                        width: 30,
+                        height: 30,
+                        minWidth: 30,
+                        padding: 0,
+                        display: 'grid',
+                        placeItems: 'center',
+                        cursor: 'pointer'
+                      }}
                     >
                       <svg
                         aria-hidden="true"
                         viewBox="0 0 24 24"
-                        width="16"
-                        height="16"
+                        width="14"
+                        height="14"
                         fill="none"
                         stroke="currentColor"
                         strokeWidth="2"
@@ -592,9 +658,6 @@ export function BoardPage() {
                 </>
               )}
             </div>
-            <button className="btn btn-secondary" onClick={() => navigate('/')}>
-              Home
-            </button>
           </div>
         </section>
 
@@ -611,7 +674,11 @@ export function BoardPage() {
             gap: '0.5rem',
             alignItems: 'center',
             padding: '0.55rem',
-            width: 56
+            width: 56,
+            background: 'rgba(248,250,252,0.95)',
+            border: '1px solid rgba(148,163,184,0.45)',
+            boxShadow: '0 14px 32px rgba(148,163,184,0.35)',
+            backdropFilter: 'blur(8px)'
           }}
         >
           <button
@@ -679,7 +746,11 @@ export function BoardPage() {
             position: 'absolute',
             left: 16,
             bottom: 16,
-            padding: '0.55rem 0.8rem'
+            padding: '0.55rem 0.8rem',
+            background: 'rgba(248,250,252,0.95)',
+            border: '1px solid rgba(148,163,184,0.45)',
+            boxShadow: '0 14px 32px rgba(148,163,184,0.35)',
+            backdropFilter: 'blur(8px)'
           }}
         >
           <span style={{ fontSize: '0.85rem', color: 'rgba(71,85,105,0.95)', fontWeight: 600 }}>
@@ -699,10 +770,14 @@ export function BoardPage() {
             alignItems: 'center',
             gap: '0.75rem',
             flexWrap: 'wrap',
-            padding: '0.55rem 0.8rem'
+            padding: '0.55rem 0.8rem',
+            background: 'rgba(248,250,252,0.95)',
+            border: '1px solid rgba(148,163,184,0.45)',
+            boxShadow: '0 14px 32px rgba(148,163,184,0.35)',
+            backdropFilter: 'blur(8px)'
           }}
         >
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#334155' }}>
             Zoom
             <input
               type="range"
@@ -714,7 +789,16 @@ export function BoardPage() {
             />
             <span style={{ minWidth: 48, textAlign: 'right' }}>{Math.round(scale * 100)}%</span>
           </label>
-          <button className="btn btn-secondary" type="button" onClick={resetView}>
+          <button
+            className="btn btn-secondary"
+            type="button"
+            onClick={resetView}
+            style={{
+              background: '#ffffff',
+              border: '1px solid rgba(148,163,184,0.55)',
+              color: '#334155'
+            }}
+          >
             Reset view
           </button>
         </section>

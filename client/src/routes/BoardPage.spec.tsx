@@ -235,7 +235,7 @@ describe('BoardPage', () => {
     expect(socketState.sockets[0].emitted).toEqual([]);
   });
 
-  it('creates note via socket and allows creator to rename board', async () => {
+  it('creates note via socket and allows creator to rename board inline', async () => {
     apiMocks.fetchBoard.mockResolvedValue(baseBoard);
     apiMocks.renameBoard.mockResolvedValue({
       ...baseBoard,
@@ -262,11 +262,10 @@ describe('BoardPage', () => {
       );
     });
 
-    await userEvent.click(screen.getByRole('button', { name: /rename board/i }));
+    await userEvent.click(screen.getByRole('heading', { name: 'Roadmap' }));
     const input = screen.getByRole('textbox', { name: /board name/i });
     await userEvent.clear(input);
-    await userEvent.type(input, 'Roadmap Q2');
-    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await userEvent.type(input, 'Roadmap Q2{Enter}');
 
     await waitFor(() => {
       expect(apiMocks.renameBoard).toHaveBeenCalledWith(baseBoard.id, {
@@ -278,7 +277,7 @@ describe('BoardPage', () => {
     await screen.findByRole('heading', { name: 'Roadmap Q2' });
   });
 
-  it('handles rename validation, escape cancel, and server error feedback', async () => {
+  it('handles inline rename validation, escape cancel, and server error feedback', async () => {
     apiMocks.fetchBoard.mockResolvedValue(baseBoard);
     apiMocks.renameBoard.mockRejectedValue({
       response: {
@@ -291,32 +290,30 @@ describe('BoardPage', () => {
     renderBoard();
     await screen.findByRole('heading', { name: 'Roadmap' });
 
-    await userEvent.click(screen.getByRole('button', { name: /rename board/i }));
+    await userEvent.click(screen.getByRole('heading', { name: 'Roadmap' }));
     const input = screen.getByRole('textbox', { name: /board name/i });
     await userEvent.clear(input);
-    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await userEvent.type(input, '{Enter}');
     expect(await screen.findByText('Board name cannot be empty.')).toBeInTheDocument();
 
-    await userEvent.type(input, 'Roadmap');
-    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await userEvent.type(input, 'Roadmap{Enter}');
     expect(apiMocks.renameBoard).not.toHaveBeenCalled();
     expect(screen.queryByRole('textbox', { name: /board name/i })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /rename board/i }));
+    await userEvent.click(screen.getByRole('heading', { name: 'Roadmap' }));
     const inputAgain = screen.getByRole('textbox', { name: /board name/i });
     await userEvent.type(inputAgain, '{Escape}');
     expect(screen.queryByRole('textbox', { name: /board name/i })).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /rename board/i }));
+    await userEvent.click(screen.getByRole('heading', { name: 'Roadmap' }));
     const retryInput = screen.getByRole('textbox', { name: /board name/i });
     await userEvent.clear(retryInput);
-    await userEvent.type(retryInput, 'Roadmap Final');
-    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await userEvent.type(retryInput, 'Roadmap Final{Enter}');
 
     expect(await screen.findByText('Only owner can rename')).toBeInTheDocument();
   });
 
-  it('does not show rename action for non-creator users', async () => {
+  it('does not allow inline rename for non-creator users', async () => {
     authState.user = {
       id: 'viewer-1',
       name: 'Viewer User',
@@ -328,7 +325,8 @@ describe('BoardPage', () => {
     renderBoard();
 
     await screen.findByRole('heading', { name: 'Roadmap' });
-    expect(screen.queryByRole('button', { name: /rename board/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('heading', { name: 'Roadmap' }));
+    expect(screen.queryByRole('textbox', { name: /board name/i })).not.toBeInTheDocument();
   });
 
   it('applies socket state and note lifecycle events', async () => {
