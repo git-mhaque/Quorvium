@@ -220,6 +220,7 @@ describe('BoardPage', () => {
     socketState.sockets.length = 0;
     socketState.clearDefaultAcks();
     vi.useRealTimers();
+    window.localStorage.clear();
     authState.user = {
       id: 'owner-1',
       name: 'Owner User',
@@ -266,6 +267,24 @@ describe('BoardPage', () => {
         })
       ])
     );
+  });
+
+  it('allows switching board theme from the top-right overlay and persists selection', async () => {
+    window.localStorage.setItem('quorvium-board-theme', 'dark');
+    apiMocks.fetchBoard.mockResolvedValue(baseBoard);
+
+    renderBoard();
+    await screen.findByRole('heading', { name: 'Roadmap' });
+
+    const lightThemeButton = screen.getByRole('button', { name: /use light theme/i });
+    const darkThemeButton = screen.getByRole('button', { name: /use dark theme/i });
+    expect(darkThemeButton).toHaveAttribute('aria-pressed', 'true');
+    expect(lightThemeButton).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(lightThemeButton);
+    expect(lightThemeButton).toHaveAttribute('aria-pressed', 'true');
+    expect(darkThemeButton).toHaveAttribute('aria-pressed', 'false');
+    expect(window.localStorage.getItem('quorvium-board-theme')).toBe('light');
   });
 
   it('reset view returns to the best-fit zoom for all cards', async () => {

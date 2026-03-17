@@ -24,6 +24,7 @@ const ZOOM_STEP = 0.1;
 const RESET_MARGIN = 120;
 const VIEWPORT_SIDE_MARGIN = 16;
 const VIEWPORT_BOTTOM_MARGIN = 24;
+const BOARD_THEME_STORAGE_KEY = 'quorvium-board-theme';
 
 function clampZoom(value: number, minZoom: number, maxZoom = MAX_ZOOM) {
   return Math.max(minZoom, Math.min(maxZoom, value));
@@ -61,6 +62,12 @@ export function BoardPage() {
   const [boardNameDraft, setBoardNameDraft] = useState('');
   const [isSavingBoardName, setIsSavingBoardName] = useState(false);
   const [isBoardTitleActionsVisible, setIsBoardTitleActionsVisible] = useState(false);
+  const [boardTheme, setBoardTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') {
+      return 'light';
+    }
+    return window.localStorage.getItem(BOARD_THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+  });
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [paletteDrag, setPaletteDrag] = useState<{ pointerId: number; color: string } | null>(null);
@@ -297,6 +304,13 @@ export function BoardPage() {
   useEffect(() => {
     setScale((current) => clampZoom(current, minZoom));
   }, [minZoom]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(BOARD_THEME_STORAGE_KEY, boardTheme);
+  }, [boardTheme]);
 
   const startBoardNameEditing = () => {
     if (!board || !isBoardCreator) {
@@ -676,6 +690,36 @@ export function BoardPage() {
     });
   }, [board, resetView]);
 
+  const isDarkBoardTheme = boardTheme === 'dark';
+  const overlaySurface = isDarkBoardTheme ? 'rgba(15,23,42,0.86)' : 'rgba(248,250,252,0.95)';
+  const overlayBorder = isDarkBoardTheme
+    ? '1px solid rgba(148,163,184,0.35)'
+    : '1px solid rgba(148,163,184,0.45)';
+  const overlayShadow = isDarkBoardTheme
+    ? '0 16px 34px rgba(2,6,23,0.55)'
+    : '0 14px 32px rgba(148,163,184,0.35)';
+  const overlayButtonBackground = isDarkBoardTheme ? 'rgba(30,41,59,0.92)' : '#ffffff';
+  const overlayButtonColor = isDarkBoardTheme ? '#e2e8f0' : '#334155';
+  const overlayButtonBorder = isDarkBoardTheme
+    ? '1px solid rgba(148,163,184,0.45)'
+    : '1px solid rgba(148,163,184,0.55)';
+  const overlayTitleColor = isDarkBoardTheme ? '#e2e8f0' : '#0f172a';
+  const overlayInputBackground = isDarkBoardTheme ? 'rgba(15,23,42,0.94)' : '#ffffff';
+  const overlayInputColor = isDarkBoardTheme ? '#f8fafc' : '#0f172a';
+  const overlayPaletteBorder = isDarkBoardTheme
+    ? '2px solid rgba(226,232,240,0.55)'
+    : '2px solid rgba(15,23,42,0.4)';
+  const overlayMutedTextColor = isDarkBoardTheme ? 'rgba(226,232,240,0.92)' : 'rgba(71,85,105,0.95)';
+  const overlayThemeButtonBackground = isDarkBoardTheme ? 'rgba(15,23,42,0.72)' : 'rgba(255,255,255,0.72)';
+  const overlayThemeButtonActiveBackground = isDarkBoardTheme ? 'rgba(51,65,85,0.95)' : 'rgba(226,232,240,0.95)';
+  const overlayThemeButtonActiveColor = isDarkBoardTheme ? '#f8fafc' : '#0f172a';
+  const overlayDragPreviewBorder = isDarkBoardTheme
+    ? '2px solid rgba(226,232,240,0.72)'
+    : '2px solid rgba(15,23,42,0.6)';
+  const overlayDragPreviewShadow = isDarkBoardTheme
+    ? '0 12px 24px rgba(2,6,23,0.55)'
+    : '0 10px 20px rgba(15,23,42,0.22)';
+
   if (fatalError) {
     return (
       <div
@@ -729,6 +773,7 @@ export function BoardPage() {
         scale={scale}
         offset={offset}
         onOffsetChange={setOffset}
+        theme={boardTheme}
       />
       <div
         style={{
@@ -750,10 +795,10 @@ export function BoardPage() {
             maxWidth: 'calc(100vw - 2rem)',
             boxSizing: 'border-box',
             padding: '0.4rem 0.6rem',
-            background: 'rgba(248,250,252,0.95)',
-            border: '1px solid rgba(148,163,184,0.45)',
+            background: overlaySurface,
+            border: overlayBorder,
             borderRadius: 10,
-            boxShadow: '0 14px 32px rgba(148,163,184,0.35)',
+            boxShadow: overlayShadow,
             backdropFilter: 'blur(8px)'
           }}
         >
@@ -770,9 +815,9 @@ export function BoardPage() {
               aria-label="Home"
               onClick={() => navigate('/')}
               style={{
-                border: '1px solid rgba(148,163,184,0.55)',
-                background: '#ffffff',
-                color: '#334155',
+                border: overlayButtonBorder,
+                background: overlayButtonBackground,
+                color: overlayButtonColor,
                 borderRadius: 8,
                 width: 28,
                 height: 28,
@@ -834,8 +879,8 @@ export function BoardPage() {
                     padding: '0.2rem 0.4rem',
                     borderRadius: 8,
                     border: '1px solid rgba(148,163,184,0.65)',
-                    background: '#ffffff',
-                    color: '#0f172a'
+                    background: overlayInputBackground,
+                    color: overlayInputColor
                   }}
                 />
               ) : (
@@ -860,7 +905,7 @@ export function BoardPage() {
                       fontSize: '1.08rem',
                       fontWeight: 500,
                       letterSpacing: '-0.01em',
-                      color: '#0f172a',
+                      color: overlayTitleColor,
                       lineHeight: 1.15,
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
@@ -877,9 +922,9 @@ export function BoardPage() {
                       title="Rename board"
                       onClick={startBoardNameEditing}
                       style={{
-                        border: '1px solid rgba(148,163,184,0.55)',
-                        background: '#ffffff',
-                        color: '#334155',
+                        border: overlayButtonBorder,
+                        background: overlayButtonBackground,
+                        color: overlayButtonColor,
                         borderRadius: 8,
                         width: 28,
                         height: 28,
@@ -917,6 +962,67 @@ export function BoardPage() {
           style={{
             pointerEvents: 'auto',
             position: 'absolute',
+            top: 16,
+            right: 16,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.45rem',
+            padding: '0.35rem 0.5rem',
+            borderRadius: 10,
+            background: overlaySurface,
+            border: overlayBorder,
+            boxShadow: overlayShadow,
+            backdropFilter: 'blur(8px)'
+          }}
+        >
+          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: overlayMutedTextColor }}>Theme</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            <button
+              type="button"
+              aria-label="Use light theme"
+              aria-pressed={boardTheme === 'light'}
+              onClick={() => setBoardTheme('light')}
+              style={{
+                border: overlayButtonBorder,
+                background: boardTheme === 'light' ? overlayThemeButtonActiveBackground : overlayThemeButtonBackground,
+                color: boardTheme === 'light' ? overlayThemeButtonActiveColor : overlayButtonColor,
+                borderRadius: 8,
+                height: 28,
+                padding: '0 0.55rem',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Light
+            </button>
+            <button
+              type="button"
+              aria-label="Use dark theme"
+              aria-pressed={boardTheme === 'dark'}
+              onClick={() => setBoardTheme('dark')}
+              style={{
+                border: overlayButtonBorder,
+                background: boardTheme === 'dark' ? overlayThemeButtonActiveBackground : overlayThemeButtonBackground,
+                color: boardTheme === 'dark' ? overlayThemeButtonActiveColor : overlayButtonColor,
+                borderRadius: 8,
+                height: 28,
+                padding: '0 0.55rem',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              Dark
+            </button>
+          </div>
+        </section>
+
+        <section
+          className="card"
+          style={{
+            pointerEvents: 'auto',
+            position: 'absolute',
             left: 16,
             top: '50%',
             transform: 'translateY(-50%)',
@@ -927,9 +1033,9 @@ export function BoardPage() {
             padding: '0.45rem 0.3rem',
             width: 50,
             borderRadius: 10,
-            background: 'rgba(248,250,252,0.95)',
-            border: '1px solid rgba(148,163,184,0.45)',
-            boxShadow: '0 14px 32px rgba(148,163,184,0.35)',
+            background: overlaySurface,
+            border: overlayBorder,
+            boxShadow: overlayShadow,
             backdropFilter: 'blur(8px)'
           }}
         >
@@ -952,7 +1058,7 @@ export function BoardPage() {
                   width: 28,
                   height: 28,
                   borderRadius: 4,
-                  border: '2px solid rgba(15, 23, 42, 0.4)',
+                  border: overlayPaletteBorder,
                   backgroundColor: color,
                   cursor: 'grab',
                   touchAction: 'none'
@@ -970,14 +1076,14 @@ export function BoardPage() {
             left: 16,
             bottom: 16,
             padding: '0.55rem 0.8rem',
-            background: 'rgba(248,250,252,0.95)',
-            border: '1px solid rgba(148,163,184,0.45)',
+            background: overlaySurface,
+            border: overlayBorder,
             borderRadius: 10,
-            boxShadow: '0 14px 32px rgba(148,163,184,0.35)',
+            boxShadow: overlayShadow,
             backdropFilter: 'blur(8px)'
           }}
         >
-          <span style={{ fontSize: '0.85rem', color: 'rgba(71,85,105,0.95)', fontWeight: 600 }}>
+          <span style={{ fontSize: '0.85rem', color: overlayMutedTextColor, fontWeight: 600 }}>
             {isConnected ? 'Connected' : 'Connecting…'} · {participants} active collaborator
             {participants > 1 ? 's' : ''}
           </span>
@@ -995,10 +1101,10 @@ export function BoardPage() {
             gap: '0.75rem',
             flexWrap: 'wrap',
             padding: '0.55rem 0.8rem',
-            background: 'rgba(248,250,252,0.95)',
-            border: '1px solid rgba(148,163,184,0.45)',
+            background: overlaySurface,
+            border: overlayBorder,
             borderRadius: 10,
-            boxShadow: '0 14px 32px rgba(148,163,184,0.35)',
+            boxShadow: overlayShadow,
             backdropFilter: 'blur(8px)'
           }}
         >
@@ -1009,9 +1115,9 @@ export function BoardPage() {
               title="Zoom out"
               onClick={handleZoomOut}
               style={{
-                border: '1px solid rgba(148,163,184,0.55)',
-                background: '#ffffff',
-                color: '#334155',
+                border: overlayButtonBorder,
+                background: overlayButtonBackground,
+                color: overlayButtonColor,
                 borderRadius: 8,
                 width: 32,
                 height: 32,
@@ -1044,7 +1150,7 @@ export function BoardPage() {
                 minWidth: 52,
                 textAlign: 'center',
                 fontWeight: 600,
-                color: '#334155',
+                color: overlayTitleColor,
                 fontVariantNumeric: 'tabular-nums'
               }}
             >
@@ -1056,9 +1162,9 @@ export function BoardPage() {
               title="Zoom in"
               onClick={handleZoomIn}
               style={{
-                border: '1px solid rgba(148,163,184,0.55)',
-                background: '#ffffff',
-                color: '#334155',
+                border: overlayButtonBorder,
+                background: overlayButtonBackground,
+                color: overlayButtonColor,
                 borderRadius: 8,
                 width: 32,
                 height: 32,
@@ -1094,9 +1200,9 @@ export function BoardPage() {
             title="Fit all notes in view"
             onClick={resetView}
             style={{
-              background: '#ffffff',
-              border: '1px solid rgba(148,163,184,0.55)',
-              color: '#334155',
+              background: overlayButtonBackground,
+              border: overlayButtonBorder,
+              color: overlayButtonColor,
               borderRadius: 8,
               display: 'inline-flex',
               alignItems: 'center',
@@ -1133,9 +1239,9 @@ export function BoardPage() {
             width: 22,
             height: 22,
             borderRadius: 5,
-            border: '2px solid rgba(15, 23, 42, 0.6)',
+            border: overlayDragPreviewBorder,
             backgroundColor: paletteDrag.color,
-            boxShadow: '0 10px 20px rgba(15,23,42,0.22)',
+            boxShadow: overlayDragPreviewShadow,
             pointerEvents: 'none',
             zIndex: 70
           }}

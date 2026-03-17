@@ -15,6 +15,7 @@ interface BoardCanvasProps {
   scale?: number;
   offset?: { x: number; y: number };
   onOffsetChange?: (nextOffset: { x: number; y: number }) => void;
+  theme?: 'light' | 'dark';
 }
 
 interface DragState {
@@ -32,7 +33,8 @@ export function BoardCanvas({
   onDeleteNote,
   scale: scaleProp,
   offset: offsetProp,
-  onOffsetChange
+  onOffsetChange,
+  theme = 'light'
 }: BoardCanvasProps) {
   const notes = useMemo(() => Object.values(board.notes).sort((a, b) => a.createdAt.localeCompare(b.createdAt)), [board.notes]);
   const [internalOffset, setInternalOffset] = useState({ x: 0, y: 0 });
@@ -183,6 +185,13 @@ export function BoardCanvas({
     }
   };
 
+  const isDarkTheme = theme === 'dark';
+  const canvasBackgroundColor = isDarkTheme ? '#0f172a' : '#f8fafc';
+  const canvasGridColor = isDarkTheme ? 'rgba(148,163,184,0.24)' : 'rgba(15,23,42,0.08)';
+  const canvasBackgroundImage = `linear-gradient(${canvasGridColor} 1px, transparent 1px), linear-gradient(90deg, ${canvasGridColor} 1px, transparent 1px)`;
+  const canvasBackgroundSize = `${gridSize}px ${gridSize}px`;
+  const canvasBackgroundPosition = `${offset.x}px ${offset.y}px`;
+
   return (
     <div
       style={{
@@ -190,11 +199,10 @@ export function BoardCanvas({
         height: '100%',
         overflow: 'hidden',
         position: 'relative',
-        backgroundColor: '#f8fafc',
-        backgroundImage:
-          'linear-gradient(rgba(15,23,42,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,0.08) 1px, transparent 1px)',
-        backgroundSize: `${gridSize}px ${gridSize}px`,
-        backgroundPosition: `${offset.x}px ${offset.y}px`,
+        backgroundColor: canvasBackgroundColor,
+        backgroundImage: canvasBackgroundImage,
+        backgroundSize: canvasBackgroundSize,
+        backgroundPosition: canvasBackgroundPosition,
         cursor: isPanning.current ? 'grabbing' : 'grab'
       }}
       onPointerDown={handlePanStart}
