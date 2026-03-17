@@ -329,9 +329,8 @@ describe('BoardPage', () => {
     expect(screen.queryByRole('textbox', { name: /board name/i })).not.toBeInTheDocument();
   });
 
-  it('applies socket state and note lifecycle events', async () => {
+  it('applies socket state, presence, and note lifecycle events', async () => {
     apiMocks.fetchBoard.mockResolvedValue(baseBoard);
-    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout');
 
     renderBoard();
     await screen.findByRole('heading', { name: 'Roadmap' });
@@ -384,15 +383,20 @@ describe('BoardPage', () => {
 
     expect(screen.getByText(/1 active collaborator/i)).toBeInTheDocument();
     act(() => {
-      socket.dispatch('board:user_joined', {
+      socket.dispatch('board:presence', {
         boardId: baseBoard.id,
-        user: { id: 'guest-2', name: 'Guest 2', isGuest: true },
-        joinedAt: '2026-03-10T12:00:00.000Z'
+        participants: 2
       });
     });
     expect(screen.getByText(/2 active collaborators/i)).toBeInTheDocument();
 
-    expect(timeoutSpy).toHaveBeenCalledWith(expect.any(Function), 30000);
+    act(() => {
+      socket.dispatch('board:presence', {
+        boardId: '00000000-0000-0000-0000-000000000000',
+        participants: 9
+      });
+    });
+    expect(screen.getByText(/2 active collaborators/i)).toBeInTheDocument();
   });
 
   it('shows operation errors for create update and delete note actions', async () => {

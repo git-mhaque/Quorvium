@@ -7,6 +7,7 @@ type Ack = (response: { ok: true } | { ok: false; error: string }) => void;
 
 interface ServerToClientEvents {
   'board:state': (payload: { board: Board }) => void;
+  'board:presence': (payload: { boardId: string; participants: number }) => void;
   'board:user_joined': (payload: {
     boardId: string;
     user: Participant;

@@ -59,6 +59,18 @@ export function createSocketServer(httpServer: HttpServer): Server {
     }
   });
 
+  const getRoomParticipantCount = (boardId: string) => io.sockets.adapter.rooms.get(boardId)?.size ?? 0;
+
+  const emitBoardPresence = (boardId: string, overrideParticipants?: number) => {
+    io.to(boardId).emit('board:presence', {
+      boardId,
+      participants:
+        overrideParticipants === undefined
+          ? getRoomParticipantCount(boardId)
+          : Math.max(0, overrideParticipants)
+    });
+  };
+
   io.on('connection', (socket) => {
     socket.on('board:join', async (rawPayload, ack?: Ack) => {
       try {
@@ -69,7 +81,14 @@ export function createSocketServer(httpServer: HttpServer): Server {
           return;
         }
 
+        const currentBoardId = socket.data.boardId as string | undefined;
+        if (currentBoardId && currentBoardId !== payload.boardId) {
+          socket.leave(currentBoardId);
+          emitBoardPresence(currentBoardId);
+        }
+
         socket.join(payload.boardId);
+        socket.data.boardId = payload.boardId;
         socket.emit('board:state', { board });
         if (payload.user) {
           socket.to(payload.boardId).emit('board:user_joined', {
@@ -78,11 +97,21 @@ export function createSocketServer(httpServer: HttpServer): Server {
             joinedAt: new Date().toISOString()
           });
         }
+        emitBoardPresence(payload.boardId);
         ack?.({ ok: true });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to join board';
         ack?.({ ok: false, error: message });
       }
+    });
+
+    socket.on('disconnecting', () => {
+      const boardId = socket.data.boardId as string | undefined;
+      if (!boardId) {
+        return;
+      }
+      const roomSize = getRoomParticipantCount(boardId);
+      emitBoardPresence(boardId, roomSize - 1);
     });
 
     socket.on('note:create', async (rawPayload, ack?: Ack) => {

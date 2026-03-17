@@ -168,6 +168,78 @@ describe('Boards API and socket collaboration', () => {
       clientB.disconnect();
     }
   });
+
+  it('emits room presence updates when an anonymous participant joins', async () => {
+    const createResponse = await agent
+      .post('/api/boards')
+      .send({
+        name: 'Presence Board',
+        owner: { id: 'presence-owner', name: 'Presence Owner', email: 'presence-owner@example.com' }
+      })
+      .expect(201);
+
+    const boardId = createResponse.body.board.id as string;
+
+    const clientA = createClient(`http://localhost:${port}`, {
+      transports: ['websocket'],
+      forceNew: true
+    });
+    const clientB = createClient(`http://localhost:${port}`, {
+      transports: ['websocket'],
+      forceNew: true
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        clientA.once('board:state', () => resolve());
+        clientA.emit(
+          'board:join',
+          {
+            boardId,
+            user: { id: 'presence-a', name: 'Presence A' }
+          },
+          (ack: { ok: boolean; error?: string }) => {
+            if (!ack.ok) {
+              reject(new Error(ack.error ?? 'Join failed'));
+            }
+          }
+        );
+      });
+
+      const presenceUpdate = new Promise<{ boardId: string; participants: number }>((resolve) => {
+        clientA.on('board:presence', (payload: { boardId: string; participants: number }) => {
+          if (payload.boardId === boardId && payload.participants === 2) {
+            resolve(payload);
+          }
+        });
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        clientB.emit(
+          'board:join',
+          {
+            boardId
+          },
+          (ack: { ok: boolean; error?: string }) => {
+            if (!ack.ok) {
+              reject(new Error(ack.error ?? 'Join failed'));
+              return;
+            }
+            resolve();
+          }
+        );
+      });
+
+      await expect(presenceUpdate).resolves.toMatchObject({
+        boardId,
+        participants: 2
+      });
+    } finally {
+      clientA.disconnect();
+      clientB.disconnect();
+    }
+  });
+
   it('rejects board creation without an authenticated owner', async () => {
     await agent.post('/api/boards').send({ name: 'Missing Owner' }).expect(400);
   });

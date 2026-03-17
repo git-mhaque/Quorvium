@@ -7,7 +7,7 @@ import { fetchBoard, renameBoard } from '../lib/api';
 import { createBoardSocket } from '../lib/socket';
 import type { BoardSocket } from '../lib/socket';
 import { useAuth } from '../state/auth';
-import type { Board, Participant, StickyNote } from '../types';
+import type { Board, StickyNote } from '../types';
 
 export function BoardPage() {
   const { boardId } = useParams();
@@ -139,23 +139,21 @@ export function BoardPage() {
       });
     };
 
-    const handleUserJoined = (_payload: {
-      boardId: string;
-      user: Participant;
-      joinedAt: string;
-    }) => {
-      setParticipants((prev) => prev + 1);
-      setTimeout(() => setParticipants((prev) => Math.max(1, prev - 1)), 30000);
+    const handleBoardPresence = (payload: { boardId: string; participants: number }) => {
+      if (payload.boardId !== boardId) {
+        return;
+      }
+      setParticipants(Math.max(1, payload.participants));
     };
 
     socket.removeAllListeners();
     socket.on('connect', () => setIsConnected(true));
     socket.on('disconnect', () => setIsConnected(false));
     socket.on('board:state', handleBoardState);
+    socket.on('board:presence', handleBoardPresence);
     socket.on('note:created', handleNoteCreated);
     socket.on('note:updated', handleNoteUpdated);
     socket.on('note:deleted', handleNoteDeleted);
-    socket.on('board:user_joined', handleUserJoined);
 
     socket.connect();
     socket.emit(
@@ -179,10 +177,10 @@ export function BoardPage() {
 
     return () => {
       socket.off('board:state', handleBoardState);
+      socket.off('board:presence', handleBoardPresence);
       socket.off('note:created', handleNoteCreated);
       socket.off('note:updated', handleNoteUpdated);
       socket.off('note:deleted', handleNoteDeleted);
-      socket.off('board:user_joined', handleUserJoined);
       socket.disconnect();
       socketRef.current = createBoardSocket();
     };
@@ -201,6 +199,7 @@ export function BoardPage() {
   useEffect(() => {
     setScale(1);
     setOffset({ x: 0, y: 0 });
+    setParticipants(1);
     shouldAutoFitFromSocketRef.current = false;
   }, [boardId]);
 
