@@ -28,7 +28,7 @@ Populate environment values before starting the app:
 |                   | `FIRESTORE_DATABASE_ID`      | `(default)` (optional)           |
 |                   | `FIRESTORE_BOARDS_COLLECTION`| `boards`                         |
 | `client/.env`     | `VITE_API_BASE_URL`          | `http://localhost:4000`          |
-|                   | `VITE_BASE_PATH`             | `./` (Cloud Storage/static hosting default) |
+|                   | `VITE_BASE_PATH`             | `/` (recommended for custom-domain and deep-link routing) |
 |                   | `VITE_ROUTER_MODE`           | `browser` (use `hash` for static hosting without rewrites) |
 |                   | `VITE_APP_VERSION`           | `dev.local` (CI sets `YYYY.MM.DD.SEQ.commitsha`, with `SEQ=run_number`) |
 |                   | `VITE_GOOGLE_CLIENT_ID`      | same as server                   |
