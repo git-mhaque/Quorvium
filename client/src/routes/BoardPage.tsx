@@ -492,9 +492,7 @@ export function BoardPage() {
       <div
         style={{
           position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
+          inset: 0,
           zIndex: 40,
           pointerEvents: 'none'
         }}
@@ -504,14 +502,12 @@ export function BoardPage() {
           className="card"
           style={{
             pointerEvents: 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.8rem',
-            width: '100%',
-            boxSizing: 'border-box',
-            borderRadius: 0,
-            borderLeft: 'none',
-            borderRight: 'none'
+            position: 'absolute',
+            top: 16,
+            left: 16,
+            width: 'min(34rem, calc(100vw - 2rem))',
+            maxWidth: 'calc(100vw - 2rem)',
+            boxSizing: 'border-box'
           }}
         >
           <div
@@ -530,7 +526,7 @@ export function BoardPage() {
                     event.preventDefault();
                     void submitBoardName();
                   }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', flex: 1 }}
                 >
                   <input
                     ref={boardNameInputRef}
@@ -547,7 +543,7 @@ export function BoardPage() {
                       }
                     }}
                     style={{
-                      width: 'min(28rem, 60vw)',
+                      width: 'min(22rem, calc(100vw - 8rem))',
                       fontSize: '1.1rem',
                       fontWeight: 600,
                       padding: '0.45rem 0.65rem'
@@ -600,73 +596,134 @@ export function BoardPage() {
               Home
             </button>
           </div>
+        </section>
 
+        <section
+          className="card"
+          style={{
+            pointerEvents: 'auto',
+            position: 'absolute',
+            left: 16,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.5rem',
+            alignItems: 'center',
+            padding: '0.55rem',
+            width: 56
+          }}
+        >
+          <button
+            className="btn btn-primary"
+            type="button"
+            aria-label="Add sticky note"
+            title="Add sticky note"
+            onClick={() => handleCreateNote()}
+            style={{
+              minWidth: 'auto',
+              width: 38,
+              height: 38,
+              borderRadius: '999px',
+              padding: 0,
+              display: 'grid',
+              placeItems: 'center'
+            }}
+          >
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 5v14" />
+              <path d="M5 12h14" />
+            </svg>
+          </button>
           <div
             style={{
               display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '0.75rem',
-              flexWrap: 'wrap'
+              flexDirection: 'column',
+              gap: '0.4rem',
+              alignItems: 'center'
             }}
           >
-            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <button className="btn btn-primary" type="button" onClick={() => handleCreateNote()}>
-                Add sticky note
-              </button>
-              <div style={{ display: 'flex', gap: '0.4rem' }}>
-                {NOTE_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    onClick={() => handleCreateNote({ color })}
-                    type="button"
-                    title="Create note with color"
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: '999px',
-                      border: '2px solid rgba(15, 23, 42, 0.4)',
-                      backgroundColor: color,
-                      cursor: 'pointer'
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                Zoom
-                <input
-                  type="range"
-                  min="0.5"
-                  max="2"
-                  step="0.1"
-                  value={scale}
-                  onChange={(event) => setScale(Number(event.target.value))}
-                />
-                <span style={{ minWidth: 48, textAlign: 'right' }}>{Math.round(scale * 100)}%</span>
-              </label>
+            {NOTE_COLORS.map((color) => (
               <button
-                className="btn btn-secondary"
+                key={color}
+                onClick={() => handleCreateNote({ color })}
                 type="button"
-                onClick={resetView}
-              >
-                Reset view
-              </button>
-              <span style={{ fontSize: '0.85rem', color: 'rgba(148,163,184,0.9)' }}>
-                {isConnected ? 'Connected' : 'Connecting…'} · {participants} active collaborator
-                {participants > 1 ? 's' : ''}
-              </span>
-            </div>
+                title="Create note with color"
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: '999px',
+                  border: '2px solid rgba(15, 23, 42, 0.4)',
+                  backgroundColor: color,
+                  cursor: 'pointer'
+                }}
+              />
+            ))}
           </div>
+        </section>
+
+        <section
+          className="card"
+          style={{
+            pointerEvents: 'auto',
+            position: 'absolute',
+            left: 16,
+            bottom: 16,
+            padding: '0.55rem 0.8rem'
+          }}
+        >
+          <span style={{ fontSize: '0.85rem', color: 'rgba(71,85,105,0.95)', fontWeight: 600 }}>
+            {isConnected ? 'Connected' : 'Connecting…'} · {participants} active collaborator
+            {participants > 1 ? 's' : ''}
+          </span>
+        </section>
+
+        <section
+          className="card"
+          style={{
+            pointerEvents: 'auto',
+            position: 'absolute',
+            right: 16,
+            bottom: 16,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.75rem',
+            flexWrap: 'wrap',
+            padding: '0.55rem 0.8rem'
+          }}
+        >
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            Zoom
+            <input
+              type="range"
+              min="0.5"
+              max="2"
+              step="0.1"
+              value={scale}
+              onChange={(event) => setScale(Number(event.target.value))}
+            />
+            <span style={{ minWidth: 48, textAlign: 'right' }}>{Math.round(scale * 100)}%</span>
+          </label>
+          <button className="btn btn-secondary" type="button" onClick={resetView}>
+            Reset view
+          </button>
         </section>
       </div>
       {feedback && (
         <div
           style={{
             position: 'fixed',
-            bottom: 24,
+            bottom: 84,
             right: 24,
             background: 'rgba(248,113,113,0.95)',
             color: '#0f172a',
