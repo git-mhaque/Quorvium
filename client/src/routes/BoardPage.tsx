@@ -1,4 +1,4 @@
-import { type KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type KeyboardEvent, type WheelEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { BoardCanvas } from '../components/BoardCanvas';
@@ -8,6 +8,14 @@ import { createBoardSocket } from '../lib/socket';
 import type { BoardSocket } from '../lib/socket';
 import { useAuth } from '../state/auth';
 import type { Board, StickyNote } from '../types';
+
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 2;
+const ZOOM_STEP = 0.1;
+
+function clampZoom(value: number) {
+  return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
+}
 
 export function BoardPage() {
   const { boardId } = useParams();
@@ -309,6 +317,31 @@ export function BoardPage() {
     );
   };
 
+  const handleCanvasWheel = useCallback(
+    (event: WheelEvent<HTMLDivElement>) => {
+      if (!event.ctrlKey || event.deltaY === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      const direction = event.deltaY < 0 ? 1 : -1;
+      const nextScale = clampZoom(Number((scale + direction * ZOOM_STEP).toFixed(2)));
+      if (nextScale === scale) {
+        return;
+      }
+
+      // Keep the point under the cursor fixed while zooming.
+      const worldX = (event.clientX - offset.x) / scale;
+      const worldY = (event.clientY - offset.y) / scale;
+      setScale(nextScale);
+      setOffset({
+        x: event.clientX - worldX * nextScale,
+        y: event.clientY - worldY * nextScale
+      });
+    },
+    [offset.x, offset.y, scale]
+  );
+
   const handleUpdateNote = (
     noteId: string,
     patch: Partial<Pick<StickyNote, 'body' | 'color' | 'x' | 'y'>>
@@ -419,7 +452,7 @@ export function BoardPage() {
       viewportWidth / (contentWidth + margin * 2),
       viewportHeight / (contentHeight + margin * 2)
     );
-    const nextScale = Math.max(0.5, Math.min(2, fitScale));
+    const nextScale = clampZoom(fitScale);
     const contentPixelWidth = (contentWidth + margin * 2) * nextScale;
     const contentPixelHeight = (contentHeight + margin * 2) * nextScale;
     const extraX = Math.max(0, (viewportWidth - contentPixelWidth) / 2);
@@ -498,6 +531,7 @@ export function BoardPage() {
         height: '100dvh',
         overflow: 'hidden'
       }}
+      onWheel={handleCanvasWheel}
     >
       <BoardCanvas
         board={board}
@@ -780,9 +814,9 @@ export function BoardPage() {
             Zoom
             <input
               type="range"
-              min="0.5"
-              max="2"
-              step="0.1"
+              min={MIN_ZOOM}
+              max={MAX_ZOOM}
+              step={ZOOM_STEP}
               value={scale}
               onChange={(event) => setScale(Number(event.target.value))}
             />

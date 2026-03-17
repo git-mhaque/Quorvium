@@ -456,6 +456,43 @@ describe('BoardPage', () => {
     });
   });
 
+  it('supports ctrl + wheel zoom in and out', async () => {
+    apiMocks.fetchBoard.mockResolvedValue({
+      ...baseBoard,
+      notes: {}
+    });
+
+    const { container } = renderBoard();
+    await screen.findByRole('heading', { name: 'Roadmap' });
+
+    const boardViewport = container.firstElementChild as HTMLDivElement;
+    expect(screen.getByText('100%')).toBeInTheDocument();
+
+    fireEvent.wheel(boardViewport, {
+      ctrlKey: true,
+      deltaY: -120,
+      clientX: 300,
+      clientY: 240
+    });
+    expect(screen.getByText('110%')).toBeInTheDocument();
+
+    fireEvent.wheel(boardViewport, {
+      ctrlKey: true,
+      deltaY: 120,
+      clientX: 300,
+      clientY: 240
+    });
+    expect(screen.getByText('100%')).toBeInTheDocument();
+
+    fireEvent.wheel(boardViewport, {
+      ctrlKey: false,
+      deltaY: -120,
+      clientX: 300,
+      clientY: 240
+    });
+    expect(screen.getByText('100%')).toBeInTheDocument();
+  });
+
   it('shows join failure message when socket join is rejected', async () => {
     apiMocks.fetchBoard.mockResolvedValue(baseBoard);
     socketState.setDefaultAck('board:join', { ok: false, error: 'Join denied' });
