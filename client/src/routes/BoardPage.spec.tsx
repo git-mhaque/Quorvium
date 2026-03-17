@@ -145,6 +145,11 @@ function getActiveSocket() {
   return joined;
 }
 
+function getZoomPercentValue() {
+  const rawValue = screen.getByTestId('zoom-value').textContent ?? '0%';
+  return Number(rawValue.replace('%', '').trim());
+}
+
 async function dragPaletteColorToBoard(clientX = 320, clientY = 220, colorIndex = 0) {
   const swatches = screen.getAllByRole('button', { name: /drag sticky note color/i });
   const swatch = swatches[colorIndex];
@@ -245,8 +250,9 @@ describe('BoardPage', () => {
     await screen.findByRole('heading', { name: 'Roadmap' });
 
     await waitFor(() => {
-      expect(screen.getByText('50%')).toBeInTheDocument();
+      expect(getZoomPercentValue()).toBeLessThanOrEqual(10);
     });
+    expect(getZoomPercentValue()).toBeGreaterThanOrEqual(2);
 
     const socket = socketState.sockets[0];
     expect(socket).toBeDefined();
@@ -260,6 +266,38 @@ describe('BoardPage', () => {
         })
       ])
     );
+  });
+
+  it('reset view returns to the best-fit zoom for all cards', async () => {
+    apiMocks.fetchBoard.mockResolvedValue({
+      ...baseBoard,
+      notes: {
+        ...baseBoard.notes,
+        'note-2': {
+          id: 'note-2',
+          body: 'Far note',
+          color: '#bfdbfe',
+          x: 12000,
+          y: 12000,
+          createdAt: '2026-03-10T12:00:00.000Z',
+          updatedAt: '2026-03-10T12:00:00.000Z'
+        }
+      }
+    });
+
+    renderBoard();
+    await screen.findByRole('heading', { name: 'Roadmap' });
+
+    await waitFor(() => {
+      expect(getZoomPercentValue()).toBeLessThanOrEqual(10);
+    });
+    const fitZoom = getZoomPercentValue();
+
+    await userEvent.click(screen.getByRole('button', { name: /zoom in/i }));
+    expect(getZoomPercentValue()).toBeGreaterThan(fitZoom);
+
+    await userEvent.click(screen.getByRole('button', { name: /reset view/i }));
+    expect(getZoomPercentValue()).toBe(fitZoom);
   });
 
   it('redirects to home when board id param is missing', async () => {
@@ -527,13 +565,11 @@ describe('BoardPage', () => {
       expect(screen.getByText(/connecting/i)).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByRole('slider'), {
-      target: { value: '1.7' }
-    });
-    expect(screen.getByText('170%')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /zoom in/i }));
+    expect(getZoomPercentValue()).toBe(110);
 
     await userEvent.click(screen.getByRole('button', { name: /reset view/i }));
-    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(getZoomPercentValue()).toBe(100);
 
     act(() => {
       socket.dispatch('connect');
@@ -553,7 +589,7 @@ describe('BoardPage', () => {
     await screen.findByRole('heading', { name: 'Roadmap' });
 
     const boardViewport = container.firstElementChild as HTMLDivElement;
-    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(getZoomPercentValue()).toBe(100);
 
     fireEvent.wheel(boardViewport, {
       ctrlKey: true,
@@ -561,7 +597,7 @@ describe('BoardPage', () => {
       clientX: 300,
       clientY: 240
     });
-    expect(screen.getByText('110%')).toBeInTheDocument();
+    expect(getZoomPercentValue()).toBe(110);
 
     fireEvent.wheel(boardViewport, {
       ctrlKey: true,
@@ -569,7 +605,7 @@ describe('BoardPage', () => {
       clientX: 300,
       clientY: 240
     });
-    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(getZoomPercentValue()).toBe(100);
 
     fireEvent.wheel(boardViewport, {
       ctrlKey: false,
@@ -577,7 +613,7 @@ describe('BoardPage', () => {
       clientX: 300,
       clientY: 240
     });
-    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(getZoomPercentValue()).toBe(100);
   });
 
   it('shows join failure message when socket join is rejected', async () => {

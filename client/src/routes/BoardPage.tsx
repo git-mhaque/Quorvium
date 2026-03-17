@@ -17,12 +17,16 @@ import type { BoardSocket } from '../lib/socket';
 import { useAuth } from '../state/auth';
 import type { Board, StickyNote } from '../types';
 
-const MIN_ZOOM = 0.5;
+const DEFAULT_MIN_ZOOM = 0.1;
+const ABSOLUTE_MIN_ZOOM = 0.02;
 const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.1;
+const RESET_MARGIN = 120;
+const VIEWPORT_SIDE_MARGIN = 16;
+const VIEWPORT_BOTTOM_MARGIN = 24;
 
-function clampZoom(value: number) {
-  return Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value));
+function clampZoom(value: number, minZoom: number, maxZoom = MAX_ZOOM) {
+  return Math.max(minZoom, Math.min(maxZoom, value));
 }
 
 function firstFiniteNumber(...values: number[]) {
@@ -70,6 +74,52 @@ export function BoardPage() {
   const [isConnected, setIsConnected] = useState(false);
 
   const isBoardCreator = Boolean(user && board && board.owner?.id === user.id);
+  const calculateFitForBoard = useCallback((targetBoard: Board) => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    const notes = Object.values(targetBoard.notes);
+    if (notes.length === 0) {
+      return null;
+    }
+
+    const minX = Math.min(...notes.map((note) => note.x));
+    const minY = Math.min(...notes.map((note) => note.y));
+    const maxX = Math.max(...notes.map((note) => note.x + NOTE_WIDTH));
+    const maxY = Math.max(...notes.map((note) => note.y + NOTE_MIN_HEIGHT));
+    const contentWidth = Math.max(1, maxX - minX);
+    const contentHeight = Math.max(1, maxY - minY);
+
+    const overlayHeight = overlayPanelRef.current?.getBoundingClientRect().height ?? 0;
+    const viewportX = VIEWPORT_SIDE_MARGIN;
+    const viewportY = Math.ceil(overlayHeight + VIEWPORT_BOTTOM_MARGIN);
+    const viewportWidth = Math.max(240, window.innerWidth - viewportX * 2);
+    const viewportHeight = Math.max(180, window.innerHeight - viewportY - VIEWPORT_BOTTOM_MARGIN);
+
+    const fitScale = Math.min(
+      viewportWidth / (contentWidth + RESET_MARGIN * 2),
+      viewportHeight / (contentHeight + RESET_MARGIN * 2)
+    );
+    const nextScale = clampZoom(fitScale, ABSOLUTE_MIN_ZOOM);
+    const contentPixelWidth = (contentWidth + RESET_MARGIN * 2) * nextScale;
+    const contentPixelHeight = (contentHeight + RESET_MARGIN * 2) * nextScale;
+    const extraX = Math.max(0, (viewportWidth - contentPixelWidth) / 2);
+    const extraY = Math.max(0, (viewportHeight - contentPixelHeight) / 2);
+
+    return {
+      scale: nextScale,
+      offset: {
+        x: viewportX + extraX - (minX - RESET_MARGIN) * nextScale,
+        y: viewportY + extraY - (minY - RESET_MARGIN) * nextScale
+      }
+    };
+  }, []);
+
+  const fitView = board ? calculateFitForBoard(board) : null;
+  const minZoom = fitView
+    ? Math.max(ABSOLUTE_MIN_ZOOM, Math.min(DEFAULT_MIN_ZOOM, fitView.scale))
+    : DEFAULT_MIN_ZOOM;
 
   useEffect(() => {
     if (!board || isEditingBoardName) {
@@ -242,6 +292,10 @@ export function BoardPage() {
     setParticipants(1);
     shouldAutoFitFromSocketRef.current = false;
   }, [boardId]);
+
+  useEffect(() => {
+    setScale((current) => clampZoom(current, minZoom));
+  }, [minZoom]);
 
   const startBoardNameEditing = () => {
     if (!board || !isBoardCreator) {
@@ -477,7 +531,7 @@ export function BoardPage() {
 
       event.preventDefault();
       const direction = event.deltaY < 0 ? 1 : -1;
-      const nextScale = clampZoom(Number((scale + direction * ZOOM_STEP).toFixed(2)));
+      const nextScale = clampZoom(Number((scale + direction * ZOOM_STEP).toFixed(2)), minZoom);
       if (nextScale === scale) {
         return;
       }
@@ -491,8 +545,16 @@ export function BoardPage() {
         y: event.clientY - worldY * nextScale
       });
     },
-    [offset.x, offset.y, scale]
+    [minZoom, offset.x, offset.y, scale]
   );
+
+  const handleZoomOut = useCallback(() => {
+    setScale((current) => clampZoom(Number((current - ZOOM_STEP).toFixed(2)), minZoom));
+  }, [minZoom]);
+
+  const handleZoomIn = useCallback(() => {
+    setScale((current) => clampZoom(Number((current + ZOOM_STEP).toFixed(2)), minZoom));
+  }, [minZoom]);
 
   const handleUpdateNote = (
     noteId: string,
@@ -575,47 +637,20 @@ export function BoardPage() {
   };
 
   const resetView = useCallback(() => {
-    if (typeof window === 'undefined' || !board) {
+    if (!board) {
       return;
     }
 
-    const notes = Object.values(board.notes);
-    if (notes.length === 0) {
+    const fit = calculateFitForBoard(board);
+    if (!fit) {
       setScale(1);
       setOffset({ x: 0, y: 0 });
       return;
     }
 
-    const margin = 120;
-    const minX = Math.min(...notes.map((note) => note.x));
-    const minY = Math.min(...notes.map((note) => note.y));
-    const maxX = Math.max(...notes.map((note) => note.x + NOTE_WIDTH));
-    const maxY = Math.max(...notes.map((note) => note.y + NOTE_MIN_HEIGHT));
-    const contentWidth = Math.max(1, maxX - minX);
-    const contentHeight = Math.max(1, maxY - minY);
-
-    const overlayHeight = overlayPanelRef.current?.getBoundingClientRect().height ?? 0;
-    const viewportX = 16;
-    const viewportY = Math.ceil(overlayHeight + 24);
-    const viewportWidth = Math.max(240, window.innerWidth - viewportX * 2);
-    const viewportHeight = Math.max(180, window.innerHeight - viewportY - 24);
-
-    const fitScale = Math.min(
-      viewportWidth / (contentWidth + margin * 2),
-      viewportHeight / (contentHeight + margin * 2)
-    );
-    const nextScale = clampZoom(fitScale);
-    const contentPixelWidth = (contentWidth + margin * 2) * nextScale;
-    const contentPixelHeight = (contentHeight + margin * 2) * nextScale;
-    const extraX = Math.max(0, (viewportWidth - contentPixelWidth) / 2);
-    const extraY = Math.max(0, (viewportHeight - contentPixelHeight) / 2);
-
-    setScale(nextScale);
-    setOffset({
-      x: viewportX + extraX - (minX - margin) * nextScale,
-      y: viewportY + extraY - (minY - margin) * nextScale
-    });
-  }, [board]);
+    setScale(fit.scale);
+    setOffset(fit.offset);
+  }, [board, calculateFitForBoard]);
 
   useEffect(() => {
     if (!board) {
@@ -931,33 +966,130 @@ export function BoardPage() {
             padding: '0.55rem 0.8rem',
             background: 'rgba(248,250,252,0.95)',
             border: '1px solid rgba(148,163,184,0.45)',
+            borderRadius: 10,
             boxShadow: '0 14px 32px rgba(148,163,184,0.35)',
             backdropFilter: 'blur(8px)'
           }}
         >
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#334155' }}>
-            Zoom
-            <input
-              type="range"
-              min={MIN_ZOOM}
-              max={MAX_ZOOM}
-              step={ZOOM_STEP}
-              value={scale}
-              onChange={(event) => setScale(Number(event.target.value))}
-            />
-            <span style={{ minWidth: 48, textAlign: 'right' }}>{Math.round(scale * 100)}%</span>
-          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <button
+              type="button"
+              aria-label="Zoom out"
+              title="Zoom out"
+              onClick={handleZoomOut}
+              style={{
+                border: '1px solid rgba(148,163,184,0.55)',
+                background: '#ffffff',
+                color: '#334155',
+                borderRadius: 8,
+                width: 32,
+                height: 32,
+                minWidth: 32,
+                padding: 0,
+                display: 'grid',
+                placeItems: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+                <path d="M8 11h6" />
+              </svg>
+            </button>
+            <span
+              data-testid="zoom-value"
+              style={{
+                minWidth: 52,
+                textAlign: 'center',
+                fontWeight: 600,
+                color: '#334155',
+                fontVariantNumeric: 'tabular-nums'
+              }}
+            >
+              {Math.round(scale * 100)}%
+            </span>
+            <button
+              type="button"
+              aria-label="Zoom in"
+              title="Zoom in"
+              onClick={handleZoomIn}
+              style={{
+                border: '1px solid rgba(148,163,184,0.55)',
+                background: '#ffffff',
+                color: '#334155',
+                borderRadius: 8,
+                width: 32,
+                height: 32,
+                minWidth: 32,
+                padding: 0,
+                display: 'grid',
+                placeItems: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+                <path d="M11 8v6" />
+                <path d="M8 11h6" />
+              </svg>
+            </button>
+          </div>
           <button
             className="btn btn-secondary"
             type="button"
+            aria-label="Reset view"
+            title="Fit all notes in view"
             onClick={resetView}
             style={{
               background: '#ffffff',
               border: '1px solid rgba(148,163,184,0.55)',
-              color: '#334155'
+              color: '#334155',
+              borderRadius: 8,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              paddingInline: '0.65rem'
             }}
           >
-            Reset view
+            <svg
+              aria-hidden="true"
+              viewBox="0 0 24 24"
+              width="15"
+              height="15"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M4 9V4h5" />
+              <path d="M20 9V4h-5" />
+              <path d="M4 15v5h5" />
+              <path d="M20 15v5h-5" />
+            </svg>
+            Fit
           </button>
         </section>
       </div>
