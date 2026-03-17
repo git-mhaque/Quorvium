@@ -190,9 +190,9 @@ export function BoardCanvas({
         height: '100%',
         overflow: 'hidden',
         position: 'relative',
-        backgroundColor: '#0f172a',
+        backgroundColor: '#f8fafc',
         backgroundImage:
-          'linear-gradient(rgba(148,163,184,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.05) 1px, transparent 1px)',
+          'linear-gradient(rgba(15,23,42,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,0.08) 1px, transparent 1px)',
         backgroundSize: `${gridSize}px ${gridSize}px`,
         backgroundPosition: `${offset.x}px ${offset.y}px`,
         cursor: isPanning.current ? 'grabbing' : 'grab'
