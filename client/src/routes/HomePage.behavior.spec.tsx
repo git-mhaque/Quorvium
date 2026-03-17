@@ -9,7 +9,8 @@ type LoginMode = 'success-with-code' | 'success-without-code' | 'error';
 const apiMocks = vi.hoisted(() => ({
   createBoard: vi.fn(),
   fetchBoardsByOwner: vi.fn(),
-  deleteBoard: vi.fn()
+  deleteBoard: vi.fn(),
+  fetchBoard: vi.fn()
 }));
 
 const clipboardMocks = vi.hoisted(() => ({
@@ -43,7 +44,8 @@ vi.mock('../lib/api', () => ({
   __esModule: true,
   createBoard: apiMocks.createBoard,
   fetchBoardsByOwner: apiMocks.fetchBoardsByOwner,
-  deleteBoard: apiMocks.deleteBoard
+  deleteBoard: apiMocks.deleteBoard,
+  fetchBoard: apiMocks.fetchBoard
 }));
 
 vi.mock('../lib/clipboard', () => ({
@@ -107,6 +109,17 @@ describe('HomePage behavior', () => {
     authState.user = null;
     authState.isGoogleConfigured = true;
     apiMocks.fetchBoardsByOwner.mockResolvedValue([]);
+    apiMocks.fetchBoard.mockResolvedValue({
+      id: '11111111-1111-1111-1111-111111111111',
+      name: 'Joined Board',
+      owner: {
+        id: 'owner-1',
+        name: 'Owner User'
+      },
+      createdAt: '2026-03-10T12:00:00.000Z',
+      updatedAt: '2026-03-10T12:00:00.000Z',
+      notes: {}
+    });
   });
 
   it('shows config hint when Google client is not configured', async () => {
@@ -128,13 +141,51 @@ describe('HomePage behavior', () => {
     renderHome();
 
     await userEvent.click(screen.getByRole('button', { name: /join board/i }));
-    expect(await screen.findByText(/Paste a board URL or ID to join/i)).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: /can'?t open board/i })).toBeInTheDocument();
+    expect(screen.getByText(/Paste a board URL or ID to join/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /dismiss/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: /can'?t open board/i })).not.toBeInTheDocument();
+    });
 
     const input = screen.getByPlaceholderText(/https:\/\/quorvium\.app\/boards/i);
-    await userEvent.type(input, 'https://quorvium.app/boards/abc-123?x=1');
+    await userEvent.type(input, 'https://quorvium.app/boards/11111111-1111-1111-1111-111111111111?x=1');
     await userEvent.click(screen.getByRole('button', { name: /join board/i }));
 
-    expect(await screen.findByTestId('board-route')).toHaveTextContent('abc-123');
+    expect(await screen.findByTestId('board-route')).toHaveTextContent(
+      '11111111-1111-1111-1111-111111111111'
+    );
+  });
+
+  it('shows overlay for invalid board id format', async () => {
+    apiMocks.fetchBoardsByOwner.mockResolvedValue([]);
+    renderHome();
+
+    const input = screen.getByPlaceholderText(/https:\/\/quorvium\.app\/boards/i);
+    await userEvent.type(input, 'https://quorvium.app/boards/not-a-valid-id');
+    await userEvent.click(screen.getByRole('button', { name: /join board/i }));
+
+    expect(await screen.findByRole('dialog', { name: /can'?t open board/i })).toBeInTheDocument();
+    expect(screen.getByText(/board id looks invalid/i)).toBeInTheDocument();
+    expect(apiMocks.fetchBoard).not.toHaveBeenCalled();
+  });
+
+  it('shows overlay when board does not exist', async () => {
+    apiMocks.fetchBoardsByOwner.mockResolvedValue([]);
+    apiMocks.fetchBoard.mockRejectedValue({
+      response: {
+        status: 404
+      }
+    });
+
+    renderHome();
+
+    const input = screen.getByPlaceholderText(/https:\/\/quorvium\.app\/boards/i);
+    await userEvent.type(input, 'https://quorvium.app/boards/11111111-1111-1111-1111-111111111111');
+    await userEvent.click(screen.getByRole('button', { name: /join board/i }));
+
+    expect(await screen.findByRole('dialog', { name: /can'?t open board/i })).toBeInTheDocument();
+    expect(screen.getByText(/Board not found/i)).toBeInTheDocument();
   });
 
   it('handles Google sign-in failures from callback and explicit onError', async () => {

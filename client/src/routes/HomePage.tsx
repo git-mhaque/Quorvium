@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useGoogleLogin } from '@react-oauth/google';
 
-import { createBoard, deleteBoard as deleteBoardRequest, fetchBoardsByOwner } from '../lib/api';
+import { createBoard, deleteBoard as deleteBoardRequest, fetchBoard, fetchBoardsByOwner } from '../lib/api';
 import { buildBoardUrl } from '../lib/boardUrl';
 import { copyTextToClipboard } from '../lib/clipboard';
 import { env } from '../env';
@@ -14,6 +14,8 @@ export function HomePage() {
   const { user, signInWithGoogle, signOut, isGoogleConfigured } = useAuth();
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [joinOverlayMessage, setJoinOverlayMessage] = useState<string | null>(null);
+  const [isJoiningBoard, setIsJoiningBoard] = useState(false);
   const [joinInput, setJoinInput] = useState('');
   const [myBoards, setMyBoards] = useState<Board[]>([]);
   const [isLoadingBoards, setIsLoadingBoards] = useState(false);
@@ -132,6 +134,7 @@ export function HomePage() {
     setDeletingBoardId(null);
     setIsCreateModalOpen(false);
     setNewBoardName('');
+    setJoinOverlayMessage(null);
   }, [user?.id]);
 
   useEffect(() => {
@@ -184,149 +187,183 @@ export function HomePage() {
     }
   }, [closeCreateModal, isAuthenticatedCreator, navigate, newBoardName, refreshBoards, user]);
 
-  const handleJoinBoard = (event: React.FormEvent<HTMLFormElement>) => {
+  const closeJoinOverlay = useCallback(() => {
+    setJoinOverlayMessage(null);
+  }, []);
+
+  const handleJoinBoard = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = joinInput.trim();
     if (!trimmed) {
-      setError('Paste a board URL or ID to join.');
+      setJoinOverlayMessage('Paste a board URL or ID to join.');
       return;
     }
+
+    const boardIdPattern =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    let boardIdCandidate = trimmed;
     try {
       const url = new URL(trimmed, window.location.href);
       const hashPath = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
       const hashMatch = hashPath.match(/^\/boards\/([^/?#]+)/);
       const pathMatch = url.pathname.match(/\/boards\/([^/?#]+)/);
-      const id = hashMatch?.[1] ?? pathMatch?.[1] ?? trimmed;
-      navigate(`/boards/${id}`);
+      const extractedId = hashMatch?.[1] ?? pathMatch?.[1];
+      if (!extractedId) {
+        setJoinOverlayMessage('Could not read a board ID from that link. Paste a board URL or board ID.');
+        return;
+      }
+      boardIdCandidate = extractedId;
     } catch {
-      navigate(`/boards/${trimmed}`);
+      boardIdCandidate = trimmed;
+    }
+
+    if (!boardIdPattern.test(boardIdCandidate)) {
+      setJoinOverlayMessage('That board ID looks invalid. Paste a valid board URL or board ID.');
+      return;
+    }
+
+    setIsJoiningBoard(true);
+    try {
+      await fetchBoard(boardIdCandidate);
+      navigate(`/boards/${boardIdCandidate}`);
+    } catch (err) {
+      const status = (err as { response?: { status?: number } } | undefined)?.response?.status;
+      if (status === 404) {
+        setJoinOverlayMessage('Board not found. Check the link and try again.');
+      } else {
+        setJoinOverlayMessage('Could not open this board right now. Please try again.');
+      }
+    } finally {
+      setIsJoiningBoard(false);
     }
   };
 
   return (
     <>
-      <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '3rem 1.5rem'
-      }}
-    >
-      <div style={{ maxWidth: 920, width: '100%' }}>
-        <header style={{ marginBottom: '2rem', textAlign: 'center' }}>
-          <p style={{ letterSpacing: '0.3em', textTransform: 'uppercase', fontSize: '0.75rem' }}>
-            Gather your quorum of ideas
-          </p>
-          <h1 style={{ fontSize: '2.75rem', margin: '0.5rem 0 0' }}>Welcome to Quorvium</h1>
-          <p style={{ color: 'rgba(226,232,240,0.75)' }}>
-            Spin up a board, invite your team, and brainstorm ideas together in real time.
-          </p>
-        </header>
-
-        <section className="card" style={{ marginBottom: '1.5rem' }}>
-          {user ? (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '1rem',
-                flexWrap: 'wrap'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
-                {user.avatarUrl && !avatarErrored ? (
-                  <img
-                    src={user.avatarUrl}
-                    alt={user.name ?? 'Signed in user'}
-                    onError={() => setAvatarErrored(true)}
-                    style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover' }}
-                  />
-                ) : (
-                  <div
-                    aria-hidden
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: '50%',
-                      background: 'rgba(148,163,184,0.25)',
-                      display: 'grid',
-                      placeItems: 'center',
-                      fontWeight: 600
-                    }}
-                  >
-                    {(user.name ?? '?').charAt(0).toUpperCase()}
+      <div className="home-page">
+        <div className="home-page-orb home-page-orb-a" aria-hidden />
+        <div className="home-page-orb home-page-orb-b" aria-hidden />
+        <div className="home-page-container">
+          <section className="card home-panel home-topbar" style={{ marginBottom: '0.75rem' }}>
+            <div className="home-topbar-brand">
+              <span className="home-brand-icon" aria-hidden>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="14"
+                  height="14"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M4 4h7v7H4z" />
+                  <path d="M13 4h7v7h-7z" />
+                  <path d="M4 13h7v7H4z" />
+                  <path d="M16.5 13.5 20 20h-7z" />
+                </svg>
+              </span>
+              <span className="home-brand-label">Quorvium</span>
+            </div>
+            <p className="home-topbar-center">Gather your quorum of ideas</p>
+            <div className="home-topbar-auth">
+              {user ? (
+                <>
+                  <div className="home-topbar-user">
+                    {user.avatarUrl && !avatarErrored ? (
+                      <img
+                        src={user.avatarUrl}
+                        alt={user.name ?? 'Signed in user'}
+                        onError={() => setAvatarErrored(true)}
+                        className="home-user-avatar home-topbar-avatar"
+                      />
+                    ) : (
+                      <div
+                        aria-hidden
+                        className="home-user-avatar home-user-placeholder home-topbar-avatar"
+                      >
+                        {(user.name ?? '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <span className="home-topbar-user-name">{user.name}</span>
                   </div>
-                )}
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ margin: 0, fontSize: '0.85rem', color: 'rgba(226,232,240,0.75)' }}>
-                    Signed in as
-                  </p>
-                  <p style={{ margin: 0, fontWeight: 600 }}>{user.name}</p>
-                  {user.email && (
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: 'rgba(226,232,240,0.75)' }}>
-                      {user.email}
+                  <button className="btn btn-secondary" type="button" onClick={signOut}>
+                    Sign out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="sr-only">
+                    Use your Google account to create new boards and collaborate with your team. If a
+                    teammate shares a link, you can still join without signing in.
+                  </span>
+                  {isGoogleConfigured ? (
+                    <GoogleSignInButton
+                      onCode={async (code) => {
+                        try {
+                          await signInWithGoogle({ code });
+                          setError(null);
+                        } catch (err) {
+                          setError(
+                            err instanceof Error ? err.message : 'Google sign-in failed. Try again.'
+                          );
+                        }
+                      }}
+                      onError={() => setError('Google sign-in failed. Try again.')}
+                    />
+                  ) : (
+                    <p className="home-topbar-config">
+                      Add <code>VITE_GOOGLE_CLIENT_ID</code>
                     </p>
                   )}
-                </div>
-              </div>
-              <button className="btn btn-secondary" type="button" onClick={signOut}>
-                Sign out
-              </button>
-            </div>
-          ) : (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '1rem',
-                flexWrap: 'wrap'
-              }}
-            >
-              <div style={{ flex: '1 1 auto', minWidth: 0 }}>
-                <h2 style={{ margin: '0 0 0.25rem', fontSize: '1.1rem' }}>Sign in with Google</h2>
-                <p style={{ margin: 0, color: 'rgba(226,232,240,0.75)' }}>
-                  Use your Google account to create new boards and collaborate with your team. If a
-                  teammate shares a link, you can still join without signing in.
-                </p>
-              </div>
-              {isGoogleConfigured ? (
-                <GoogleSignInButton
-                  onCode={async (code) => {
-                    try {
-                      await signInWithGoogle({ code });
-                      setError(null);
-                    } catch (err) {
-                      setError(
-                        err instanceof Error ? err.message : 'Google sign-in failed. Try again.'
-                      );
-                    }
-                  }}
-                  onError={() => setError('Google sign-in failed. Try again.')}
-                />
-              ) : (
-                <p style={{ color: 'rgba(226,232,240,0.75)', margin: 0 }}>
-                  Add <code>VITE_GOOGLE_CLIENT_ID</code> to enable Google sign-in.
-                </p>
+                </>
               )}
             </div>
-          )}
-        </section>
+          </section>
 
-        {isAuthenticatedCreator && (
-          <section className="card" style={{ marginBottom: '1.5rem' }}>
+          <header className="home-hero">
+            <h1 className="home-title">Welcome to Quorvium</h1>
+            <p className="home-subtitle">
+              Spin up a board, invite your team, and brainstorm ideas together in real time.
+            </p>
+            <div className="home-feature-row" aria-hidden>
+              <span className="home-feature">Live collaboration</span>
+              <span className="home-feature">Sticky notes</span>
+              <span className="home-feature">Fast sharing</span>
+            </div>
+          </header>
+
+          <section className="card home-panel home-join-panel" style={{ marginBottom: '1.5rem' }}>
+            <h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>Join an existing Quorvium board</h2>
+            <form className="home-join-form" onSubmit={handleJoinBoard}>
+              <label className="home-join-input-wrap">
+                <span style={{ display: 'block', marginBottom: '0.4rem' }}>Board URL or ID</span>
+                <input
+                  className="input"
+                  placeholder="https://quorvium.app/boards/..."
+                  value={joinInput}
+                  disabled={isJoiningBoard}
+                  onChange={(event) => {
+                    setJoinInput(event.target.value);
+                    setJoinOverlayMessage(null);
+                  }}
+                />
+              </label>
+              <button className="btn btn-secondary home-join-button" type="submit" disabled={isJoiningBoard}>
+                {isJoiningBoard ? 'Joining…' : 'Join board'}
+              </button>
+            </form>
+          </section>
+
+          {!isAuthenticatedCreator && error && (
+            <p style={{ color: '#f87171', marginTop: '-1rem', fontSize: '0.9rem' }}>{error}</p>
+          )}
+
+          {isAuthenticatedCreator && (
+            <section className="card home-panel" style={{ marginBottom: '1.5rem' }}>
             <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '1rem',
-                marginBottom: '0.75rem',
-                flexWrap: 'wrap'
-              }}
+              className="home-section-header"
             >
               <h2 style={{ margin: 0, fontSize: '1.1rem' }}>My boards</h2>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -373,80 +410,26 @@ export function HomePage() {
                 You haven&apos;t created any boards yet.
               </p>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
+              <div className="home-table-wrap">
+                <table className="home-boards-table">
                   <thead>
                     <tr>
-                      <th
-                        style={{
-                          textAlign: 'left',
-                          fontSize: '0.8rem',
-                          fontWeight: 600,
-                          padding: '0.5rem 0.75rem',
-                          color: 'rgba(148,163,184,0.95)',
-                          borderBottom: '1px solid rgba(148,163,184,0.2)'
-                        }}
-                      >
+                      <th>
                         Name
                       </th>
-                      <th
-                        style={{
-                          textAlign: 'left',
-                          fontSize: '0.8rem',
-                          fontWeight: 600,
-                          padding: '0.5rem 0.75rem',
-                          color: 'rgba(148,163,184,0.95)',
-                          borderBottom: '1px solid rgba(148,163,184,0.2)'
-                        }}
-                      >
+                      <th>
                         Created
                       </th>
-                      <th
-                        style={{
-                          textAlign: 'left',
-                          fontSize: '0.8rem',
-                          fontWeight: 600,
-                          padding: '0.5rem 0.75rem',
-                          color: 'rgba(148,163,184,0.95)',
-                          borderBottom: '1px solid rgba(148,163,184,0.2)'
-                        }}
-                      >
+                      <th>
                         Updated
                       </th>
-                      <th
-                        style={{
-                          textAlign: 'left',
-                          fontSize: '0.8rem',
-                          fontWeight: 600,
-                          padding: '0.5rem 0.75rem',
-                          color: 'rgba(148,163,184,0.95)',
-                          borderBottom: '1px solid rgba(148,163,184,0.2)'
-                        }}
-                      >
+                      <th>
                         Board Link
                       </th>
-                      <th
-                        style={{
-                          textAlign: 'left',
-                          fontSize: '0.8rem',
-                          fontWeight: 600,
-                          padding: '0.5rem 0.75rem',
-                          color: 'rgba(148,163,184,0.95)',
-                          borderBottom: '1px solid rgba(148,163,184,0.2)'
-                        }}
-                      >
+                      <th>
                         Copy Board Link
                       </th>
-                      <th
-                        style={{
-                          textAlign: 'left',
-                          fontSize: '0.8rem',
-                          fontWeight: 600,
-                          padding: '0.5rem 0.75rem',
-                          color: 'rgba(148,163,184,0.95)',
-                          borderBottom: '1px solid rgba(148,163,184,0.2)'
-                        }}
-                      >
+                      <th>
                         Delete Board
                       </th>
                     </tr>
@@ -456,53 +439,24 @@ export function HomePage() {
                       const isDeleting = deletingBoardId === board.id;
                       return (
                         <tr key={board.id}>
-                          <td
-                            style={{
-                              padding: '0.6rem 0.75rem',
-                              borderBottom: '1px solid rgba(148,163,184,0.1)',
-                              fontWeight: 600
-                            }}
-                          >
+                          <td className="home-boards-name">
                             {board.name}
                           </td>
-                          <td
-                            style={{
-                              padding: '0.6rem 0.75rem',
-                              borderBottom: '1px solid rgba(148,163,184,0.1)'
-                            }}
-                          >
+                          <td>
                             {formatTimestamp(board.createdAt)}
                           </td>
-                          <td
-                            style={{
-                              padding: '0.6rem 0.75rem',
-                              borderBottom: '1px solid rgba(148,163,184,0.1)'
-                            }}
-                          >
+                          <td>
                             {formatTimestamp(board.updatedAt)}
                           </td>
-                          <td
-                            style={{
-                              padding: '0.6rem 0.75rem',
-                              borderBottom: '1px solid rgba(148,163,184,0.1)'
-                            }}
-                          >
+                          <td>
                             <Link
                               to={`/boards/${board.id}`}
-                              style={{
-                                color: '#38bdf8',
-                                fontWeight: 600
-                              }}
+                              className="home-board-link"
                             >
                               Join board
                             </Link>
                           </td>
-                          <td
-                            style={{
-                              padding: '0.6rem 0.75rem',
-                              borderBottom: '1px solid rgba(148,163,184,0.1)'
-                            }}
-                          >
+                          <td>
                             <button
                               className="btn btn-secondary"
                               type="button"
@@ -513,12 +467,7 @@ export function HomePage() {
                               {copiedBoardId === board.id ? 'Copied!' : 'Copy link'}
                             </button>
                           </td>
-                          <td
-                            style={{
-                              padding: '0.6rem 0.75rem',
-                              borderBottom: '1px solid rgba(148,163,184,0.1)'
-                            }}
-                          >
+                          <td>
                             <button
                               className="btn btn-secondary"
                               type="button"
@@ -542,36 +491,44 @@ export function HomePage() {
                 </table>
               </div>
             )}
-          </section>
-        )}
-
-        {!isAuthenticatedCreator && (
-          <section className="card" style={{ marginBottom: '1.5rem' }}>
-            <h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>Join an existing board</h2>
-            <form onSubmit={handleJoinBoard}>
-              <label style={{ display: 'block', marginBottom: '0.75rem' }}>
-                <span style={{ display: 'block', marginBottom: '0.4rem' }}>Board URL or ID</span>
-                <input
-                  className="input"
-                  placeholder="https://quorvium.app/boards/..."
-                  value={joinInput}
-                  onChange={(event) => {
-                    setJoinInput(event.target.value);
-                    setError(null);
-                  }}
-                />
-              </label>
-              <button className="btn btn-secondary" type="submit" style={{ width: '100%' }}>
-                Join board
-              </button>
-            </form>
-          </section>
-        )}
-        {!isAuthenticatedCreator && error && (
-          <p style={{ color: '#f87171', marginTop: '-1rem', fontSize: '0.9rem' }}>{error}</p>
-        )}
+            </section>
+          )}
+        </div>
       </div>
-    </div>
+      {joinOverlayMessage && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="join-error-heading"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15,23,42,0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.5rem',
+            zIndex: 1000
+          }}
+          onClick={closeJoinOverlay}
+        >
+          <div
+            className="card"
+            style={{ width: '100%', maxWidth: 420, padding: '1.5rem' }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="join-error-heading" style={{ marginTop: 0, marginBottom: '0.75rem' }}>
+              Can&apos;t open board
+            </h2>
+            <p style={{ margin: 0, color: 'rgba(226,232,240,0.9)' }}>{joinOverlayMessage}</p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <button className="btn btn-secondary" type="button" onClick={closeJoinOverlay}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {isCreateModalOpen && (
         <div
           role="dialog"
